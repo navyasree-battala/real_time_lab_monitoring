@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeOccupy AI — Tactical Occupancy Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mainBg: '#12140F',
+                        primaryCard: '#1C2118',
+                        secPanel: '#252B20',
+                        elevated: '#303729',
+                        rustOrange: '#C76A2A',
+                        burntAmber: '#D99A3D',
+                        oliveGreen: '#7A8F3A',
+                        sageGreen: '#9CAF70',
+                        copperOrange: '#B85C38',
+                        mutedRed: '#B33A3A',
+                        warmWhite: '#EFE7D3',
+                        dustGrey: '#A6A08F',
+                        tacticalBorder: '#4B5438',
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['Share Tech Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-mainBg text-warmWhite min-h-screen relative overflow-x-hidden">
+    <div class="ambient-grid"></div>
+
+    <!-- Toast notification -->
+    <div id="toast" class="fixed top-4 right-4 z-50 hidden px-4 py-2 rounded text-sm font-mono font-bold border shadow-lg transition-all duration-300"></div>
+
+    <div class="page-layer max-w-[1600px] mx-auto px-4 py-6 md:px-8 space-y-6">
+
+        <!-- ================= TOP HEADER ================= -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-tacticalBorder pb-5">
+            <div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="px-2.5 py-0.5 bg-secPanel border border-tacticalBorder text-sageGreen text-[10px] font-black tracking-widest rounded font-mono uppercase">JETSON AGX ORIN</span>
+                    <span class="px-2.5 py-0.5 bg-secPanel border border-tacticalBorder text-burntAmber text-[10px] font-black tracking-widest rounded font-mono uppercase">YOLOv8m TensorRT</span>
+                    <span class="px-2.5 py-0.5 bg-secPanel border border-tacticalBorder text-rustOrange text-[10px] font-black tracking-widest rounded font-mono uppercase">ByteTrack Active</span>
+                    <span id="session-timestamp" class="text-xs text-dustGrey font-mono ml-2">Sync: Offline</span>
+                </div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-white mt-2">
+                    EdgeOccupy <span class="text-rustOrange">AI</span>
+                </h1>
+                <p class="text-xs text-dustGrey mt-0.5 tracking-wider uppercase font-mono">
+                    Autonomous Laboratory Occupancy Monitoring System
+                </p>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex flex-wrap items-end gap-3">
+
+                <!-- Jetson IP Config Box -->
+                <div class="flex flex-col bg-secPanel border border-tacticalBorder rounded p-2 gap-1">
+                    <span class="text-[9px] text-dustGrey font-mono tracking-widest uppercase">
+                        Remote Access — Jetson IP Address
+                    </span>
+                    <div class="flex items-center gap-1.5">
+                        <input id="jetson-ip-input" type="text"
+                            placeholder="e.g. 10.23.91.25:8000"
+                            class="bg-mainBg text-white border border-tacticalBorder rounded px-2 py-1 text-xs w-40 focus:outline-none focus:border-rustOrange font-mono" />
+                        <button id="save-ip-btn"
+                            class="px-2.5 py-1 bg-rustOrange text-white text-[10px] font-bold rounded hover:bg-copperOrange transition duration-200 font-mono">
+                            SAVE
+                        </button>
+                        <button id="clear-ip-btn"
+                            class="px-2.5 py-1 bg-mainBg border border-tacticalBorder text-dustGrey text-[10px] font-bold rounded hover:bg-primaryCard transition duration-200 font-mono">
+                            CLEAR
+                        </button>
+                    </div>
+                    <span id="ip-status-label" class="text-[9px] text-dustGrey font-mono">
+                        Using local server (same device as Jetson)
+                    </span>
+                </div>
+
+                <!-- Status Banner -->
+                <div class="flex flex-col gap-2">
+                    <div id="status-banner" class="alert-banner alert-normal">
+                        <span class="status-dot"></span>
+                        <span id="banner-text">SYSTEM STATUS ACTIVE — MONITORING NODE 0</span>
+                    </div>
+                    <!-- Control Buttons -->
+                    <div class="flex bg-secPanel p-1 border border-tacticalBorder rounded gap-1.5">
+                        <button id="start-btn" class="px-3 py-1.5 bg-oliveGreen text-black text-xs font-bold rounded hover:bg-sageGreen transition duration-200">
+                            Start Live
+                        </button>
+                        <button id="pause-btn" class="px-3 py-1.5 bg-mainBg border border-tacticalBorder text-xs font-semibold rounded hover:bg-primaryCard transition duration-200">
+                            Pause Live
+                        </button>
+                        <button id="stop-btn" class="px-3 py-1.5 bg-mutedRed text-white text-xs font-bold rounded hover:bg-opacity-95 transition duration-200">
+                            Stop Live
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- ================= TOP KPI CARDS (4 cards, no Peak) ================= -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <!-- Card 1: Laboratory Status -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-rustOrange/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Lab Status</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <div class="mt-4">
+                    <span id="session-status-badge" class="text-xl font-black text-oliveGreen tracking-wider font-mono">EMPTY</span>
+                </div>
+                <p id="session-status-desc" class="text-[10px] text-dustGrey mt-1 font-mono">NO ACTIVE OCCUPANCY</p>
+            </div>
+
+            <!-- Card 2: Current Occupancy -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-sageGreen/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Current Occupancy</span>
+                    <svg class="w-4 h-4 text-sageGreen" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="unique-persons-count" class="text-3xl font-black text-white font-mono">0</span>
+                    <span class="text-xs text-dustGrey font-mono">ACTIVE</span>
+                </div>
+                <p class="text-[10px] text-dustGrey mt-1 font-mono">PERSONS INSIDE RIGHT NOW</p>
+            </div>
+
+            <!-- Card 3: Total Entries -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-rustOrange/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Total Entries</span>
+                    <svg class="w-4 h-4 text-rustOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="total-frames-count" class="text-3xl font-black text-white font-mono">0</span>
+                    <span class="text-xs text-dustGrey font-mono">TODAY</span>
+                </div>
+                <p class="text-[10px] text-dustGrey mt-1 font-mono">TOTAL PERSONS ENTERED</p>
+            </div>
+
+            <!-- Card 4: Total Exited -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-mutedRed/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Total Exited</span>
+                    <svg class="w-4 h-4 text-mutedRed" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="avg-confidence" class="text-3xl font-black text-white font-mono">0</span>
+                    <span class="text-xs text-dustGrey font-mono">TODAY</span>
+                </div>
+                <p class="text-[10px] text-dustGrey mt-1 font-mono">TOTAL PERSONS EXITED</p>
+            </div>
+        </section>
+
+        <!-- ================= MIDDLE SECTION ================= -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Entry / Exit Analytics graph -->
+            <div class="lg:col-span-2 bg-primaryCard border border-tacticalBorder rounded p-5 flex flex-col justify-between">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-bold text-white uppercase tracking-wider font-mono">Entry / Exit Analytics</h2>
+                            <button id="reset-date-btn" class="hidden px-2 py-0.5 bg-rustOrange/20 hover:bg-rustOrange/40 text-rustOrange border border-rustOrange/30 text-[10px] font-bold rounded font-mono transition-all duration-200">
+                                SHOW TODAY
+                            </button>
+                        </div>
+                        <p class="text-xs text-dustGrey" id="chart-subtitle">Hourly crossing trends for today</p>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-mono">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded bg-rustOrange inline-block"></span>
+                            <span>Entries</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded bg-oliveGreen inline-block"></span>
+                            <span>Exits</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="h-[250px] relative">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Right: AI Processing Status -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-5 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-white uppercase tracking-wider font-mono border-b border-tacticalBorder pb-2 flex items-center justify-between">
+                        <span>AI Processing Status</span>
+                        <span id="activity-ping-dot" class="w-2 h-2 rounded-full bg-oliveGreen inline-block animate-ping"></span>
+                    </h2>
+                    <div class="mt-4 space-y-3 text-xs font-mono">
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Device:</span>
+                            <span class="text-white font-semibold">Jetson AGX Orin 64GB</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Model:</span>
+                            <span class="text-burntAmber font-semibold">YOLOv8m TensorRT</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Tracker:</span>
+                            <span class="text-white font-semibold">ByteTrack</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Database:</span>
+                            <span class="text-oliveGreen font-semibold">SQLite Connected</span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-dustGrey">Session Runtime:</span>
+                            <span id="runtime-display" class="text-rustOrange font-semibold">00:00:00</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 p-3 bg-secPanel border border-tacticalBorder rounded text-xs">
+                    <span class="text-[10px] text-burntAmber font-bold tracking-widest uppercase block mb-1 font-mono">Cognitive Analytics Feed</span>
+                    <p id="qwen-summary-text" class="text-dustGrey leading-relaxed font-sans">
+                        Reading localized database records. Initializing stream trackers...
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= BOTTOM: HISTORICAL REPORTS TABLE ================= -->
+        <section class="bg-primaryCard border border-tacticalBorder rounded p-5">
+            <div class="flex justify-between items-center border-b border-tacticalBorder pb-3 mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-white uppercase tracking-wider font-mono">Historical Reports Table</h2>
+                    <p class="text-xs text-dustGrey">Click any date row to view that day's hourly trend in the chart above</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-mono text-dustGrey">
+                    <span class="w-3 h-3 rounded-full bg-secPanel border border-tacticalBorder inline-block"></span>
+                    <span>DB: counts.db</span>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-tacticalBorder text-dustGrey uppercase font-bold tracking-wider font-mono">
+                            <th class="py-3 px-4">Date</th>
+                            <th class="py-3 px-4 text-right">Entered</th>
+                            <th class="py-3 px-4 text-right">Exited</th>
+                            <th class="py-3 px-4 text-right">Net Occupancy</th>
+                            <th class="py-3 px-4 text-right">Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="id-photos-container">
+                        <tr>
+                            <td colspan="5" class="py-6 text-center text-dustGrey text-xs">
+                                Connecting and querying database. Loading telemetry logs...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="flex flex-col md:flex-row justify-between items-center gap-3 border-t border-tacticalBorder pt-5 text-[11px] text-dustGrey font-mono">
+            <span>EdgeOccupy AI — Embedded Systems Laboratory Project</span>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-1.5">
+                    <span id="connection-status" class="w-2 h-2 rounded-full bg-oliveGreen"></span>
+                    <span id="status-text" class="font-bold text-oliveGreen">CONNECTED</span>
+                </div>
+                <span id="ws-target">Server: HTTP Polling Active</span>
+                <span id="last-packet">Packet: Waiting...</span>
+            </div>
+        </footer>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html>
