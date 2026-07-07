@@ -297,7 +297,7 @@ async function init() {
             }
         } catch(e) {}
         // If hash fails, clear it and fall through to auto-discovery
-        window.location.hash = '';
+        window.history.replaceState(null, null, window.location.pathname);
     }
 
     setStatus('🔍 Auto-discovering Jetson tunnel…');
@@ -312,7 +312,7 @@ async function init() {
                     if (data && data.message) {
                         const host = data.message.trim();
                         API_BASE = host.startsWith('http') ? host : 'https://' + host;
-                        window.location.hash = host;
+                        window.history.replaceState(null, null, '#' + host);
                         setStatus('🔌 Tunnel found — connecting…');
                         launchDashboard();
                         return;
@@ -368,6 +368,7 @@ async function fetchCloudData() {
                         historical_summary: d.history ?? [],
                         insights: d.insights ?? 'Historical data loaded from cloud cache.',
                         is_cloud_cached: true,
+                        raw_cloud_data: d
                     };
                 }
             } catch(e) {}
@@ -414,7 +415,7 @@ async function tryReconnect() {
                     const test = await fetch(newBase + '/api/stats', { signal: AbortSignal.timeout(4000) });
                     if (test.ok) {
                         API_BASE = newBase;
-                        window.location.hash = host;
+                        window.history.replaceState(null, null, '#' + host);
                         connectWebSocket();
                         pollLoop();
                     }
@@ -698,13 +699,29 @@ function updateUI(data) {
             <td class="py-3 px-4 text-right text-burntAmber font-bold font-mono">${net}</td>
             <td class="py-3 px-4 text-right text-xs font-mono text-dustGrey">${updated}</td>
         `;
-        tr.addEventListener('click', () => { selectedDate = rowDate; fetchData(); });
+        tr.addEventListener('click', () => { 
+            selectedDate = rowDate; 
+            if (API_BASE === 'https://offline-mode' || !isOnline) {
+                const cached = localStorage.getItem('edgeoccupy_data');
+                if (cached) {
+                    try {
+                        const d = JSON.parse(cached);
+                        if (d.raw_cloud_data && d.raw_cloud_data.history_hourly && d.raw_cloud_data.history_hourly[rowDate]) {
+                            d.hourly_timeline = d.raw_cloud_data.history_hourly[rowDate];
+                        }
+                        d.target_date = rowDate;
+                        updateUI(d);
+                    } catch(e) {}
+                }
+            } else {
+                fetchData(); 
+            }
+        });
         tableBody.appendChild(tr);
     });
 }
 
 window.onload = init;
-window.addEventListener('hashchange', () => { location.reload(); });
 </script>
 </body>
 </html>
