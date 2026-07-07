@@ -284,13 +284,23 @@ async function init() {
 
     const hash = window.location.hash.replace('#', '').trim();
     if (hash) {
-        API_BASE = hash.includes('.') || hash.includes(':')
+        const tempBase = hash.includes('.') || hash.includes(':')
             ? (hash.startsWith('http') ? hash : 'https://' + hash)
             : `https://${hash}.serveo.net`;
         setStatus('🔌 Connecting to Jetson…');
-        launchDashboard();
-    } else {
-        setStatus('🔍 Auto-discovering Jetson tunnel…');
+        try {
+            const test = await fetch(tempBase + '/api/stats', { signal: AbortSignal.timeout(3000) });
+            if (test.ok) {
+                API_BASE = tempBase;
+                launchDashboard();
+                return;
+            }
+        } catch(e) {}
+        // If hash fails, clear it and fall through to auto-discovery
+        window.location.hash = '';
+    }
+
+    setStatus('🔍 Auto-discovering Jetson tunnel…');
         try {
             const res  = await fetch(NTFY_TUNNEL);
             const text = await res.text();
@@ -332,7 +342,6 @@ async function init() {
 
         setStatus('⚠️ Jetson is offline. Will auto-connect when it starts.');
         setTimeout(init, 10000);
-    }
 }
 
 async function fetchCloudData() {
@@ -531,7 +540,15 @@ async function fetchData() {
         saveCache(d);
     } catch(e) {
         updateConnectionStatus('offline');
-        loadAnyCache();
+        if (pollTimer) clearInterval(pollTimer);
+        const cloudData = await fetchCloudData();
+        if (cloudData) {
+            API_BASE = 'https://offline-mode';
+            renderOffline(cloudData);
+            setInterval(tryReconnect, 15000);
+        } else {
+            loadAnyCache();
+        }
     }
 }
 
