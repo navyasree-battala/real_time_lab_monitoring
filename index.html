@@ -3,207 +3,201 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EdgeOccupy AI</title>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<title>EdgeOccupy AI — IIT Tirupati Lab Monitor</title>
+<meta name="description" content="Real-time lab occupancy monitoring dashboard for IIT Tirupati using edge AI on NVIDIA Jetson.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#12140F;color:#EFE7D3;font-family:'Outfit',sans-serif;min-height:100vh}
-body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(75,84,56,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(75,84,56,.06) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f14; --surface: #131720; --card: #1a1f2e;
+    --border: #252d40; --accent: #3b82f6; --accent2: #8b5cf6;
+    --green: #22c55e; --red: #ef4444; --amber: #f59e0b;
+    --text: #e2e8f0; --muted: #64748b; --dim: #94a3b8;
+    --font: 'Inter', sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
 
-/* Setup screen */
-#setup{position:fixed;inset:0;background:#12140F;display:flex;align-items:center;justify-content:center;z-index:100;padding:20px}
-#setup.hidden{display:none}
-.setup-card{background:#1C2118;border:1px solid #4B5438;border-radius:14px;padding:36px 32px;max-width:460px;width:100%;text-align:center}
-.setup-card h1{font-size:2rem;font-weight:900;margin-bottom:6px}
-.setup-card h1 span{color:#C76A2A}
-.setup-card p{color:#A6A08F;font-size:12px;font-family:'Share Tech Mono',monospace;letter-spacing:2px;text-transform:uppercase;margin-bottom:28px}
-.setup-input{width:100%;background:#12140F;border:1px solid #4B5438;border-radius:8px;padding:13px 16px;font-family:'Share Tech Mono',monospace;font-size:14px;color:#EFE7D3;outline:none;margin-bottom:10px;text-align:center}
-.setup-input:focus{border-color:#C76A2A}
-.setup-btn{width:100%;padding:13px;background:#C76A2A;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:800;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:.2s}
-.setup-btn:hover{background:#B85C38}
-.setup-hint{color:#A6A08F;font-size:11px;font-family:'Share Tech Mono',monospace;margin-top:12px;line-height:1.6}
-.setup-hint code{color:#9CAF70;background:#252B20;padding:2px 6px;border-radius:3px}
+  /* ── Setup Screen ─────────────────────────────────────────── */
+  #setup {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100vh; gap: 1.5rem; padding: 2rem; text-align: center;
+  }
+  .setup-logo { font-size: 2.8rem; font-weight: 700; letter-spacing: -0.03em; }
+  .setup-logo span { color: var(--accent); }
+  .setup-sub { color: var(--dim); font-size: 0.95rem; max-width: 400px; line-height: 1.6; }
+  .setup-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+    padding: 2rem; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 1rem;
+  }
+  .setup-hint { color: var(--dim); font-size: 0.82rem; line-height: 1.5; }
+  #tunnel-input {
+    width: 100%; padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 0.85rem;
+    outline: none; transition: border-color 0.2s;
+  }
+  #tunnel-input:focus { border-color: var(--accent); }
+  #connect-btn {
+    padding: 0.75rem; background: var(--accent); border: none; border-radius: 8px;
+    color: #fff; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: opacity 0.2s;
+  }
+  #connect-btn:hover { opacity: 0.85; }
+  .hidden { display: none !important; }
 
-/* Dashboard */
-#dashboard{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:20px 24px;display:none}
-#dashboard.visible{display:block}
-header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid #4B5438;padding-bottom:18px;margin-bottom:20px}
-.brand h1{font-size:1.8rem;font-weight:900}.brand h1 span{color:#C76A2A}
-.brand p{font-size:10px;color:#A6A08F;font-family:'Share Tech Mono',monospace;letter-spacing:2px;text-transform:uppercase}
-.badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
-.badge{font-family:'Share Tech Mono',monospace;font-size:9px;font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:3px 8px;border-radius:4px;border:1px solid}
-.b-g{color:#9CAF70;border-color:#7A8F3A;background:rgba(122,143,58,.1)}
-.b-a{color:#D99A3D;border-color:#D99A3D;background:rgba(217,154,61,.1)}
-.b-o{color:#C76A2A;border-color:#C76A2A;background:rgba(199,106,42,.1)}
-.controls{display:flex;flex-direction:column;gap:8px;align-items:flex-end}
-#status-banner{display:flex;align-items:center;gap:8px;padding:6px 14px;border-radius:6px;font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;border:1px solid}
-.alert-normal{background:rgba(122,143,58,.1);border-color:#7A8F3A;color:#9CAF70}
-.alert-warning{background:rgba(184,92,56,.1);border-color:#B85C38;color:#D99A3D}
-.alert-critical{background:rgba(179,58,58,.1);border-color:#B33A3A;color:#B33A3A}
-.status-dot{width:7px;height:7px;border-radius:50%;background:currentColor;animation:blink 1.5s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-.btn-row{display:flex;gap:6px}
-.btn{padding:7px 14px;border:none;border-radius:6px;font-family:'Outfit',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:.2s}
-.btn-green{background:#7A8F3A;color:#fff}.btn-green:hover{background:#9CAF70}
-.btn-amber{background:#252B20;border:1px solid #4B5438;color:#EFE7D3}.btn-amber:hover{background:#303729}
-.btn-red{background:#B33A3A;color:#fff}.btn-red:hover{background:#8B2A2A}
-.btn:disabled{opacity:.3;cursor:not-allowed}
-.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
-@media(max-width:768px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
-.kpi{background:#1C2118;border:1px solid #4B5438;border-radius:10px;padding:16px}
-.kpi-label{font-family:'Share Tech Mono',monospace;font-size:10px;color:#A6A08F;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:12px}
-.kpi-val{font-size:2rem;font-weight:900;font-family:'Share Tech Mono',monospace}
-.kpi-sub{font-size:10px;color:#A6A08F;font-family:'Share Tech Mono',monospace;margin-top:4px}
-.mid-grid{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px}
-@media(max-width:900px){.mid-grid{grid-template-columns:1fr}}
-.card{background:#1C2118;border:1px solid #4B5438;border-radius:10px;padding:18px}
-.card-title{font-family:'Share Tech Mono',monospace;font-size:11px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#A6A08F;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
-.chart-wrap{height:220px;position:relative}
-.ai-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(75,84,56,.4);font-family:'Share Tech Mono',monospace;font-size:11px}
-.ai-row:last-child{border-bottom:none}
-.ai-key{color:#A6A08F}.ai-val{color:#EFE7D3;font-weight:600}
-.insights{background:#252B20;border:1px solid #4B5438;border-radius:8px;padding:12px;margin-top:14px;font-size:12px;color:#A6A08F;line-height:1.6}
-.insights-label{font-family:'Share Tech Mono',monospace;font-size:9px;color:#D99A3D;font-weight:700;letter-spacing:3px;text-transform:uppercase;margin-bottom:6px}
-table{width:100%;border-collapse:collapse;font-size:12px}
-thead tr{border-bottom:1px solid #4B5438}
-th{font-family:'Share Tech Mono',monospace;font-size:10px;color:#A6A08F;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:10px 14px;text-align:right}
-th:first-child{text-align:left}
-td{padding:10px 14px;border-bottom:1px solid rgba(75,84,56,.3);text-align:right;font-family:'Share Tech Mono',monospace}
-td:first-child{text-align:left;color:#EFE7D3;font-weight:700}
-tbody tr{cursor:pointer;transition:.15s}
-tbody tr:hover{background:#252B20}
-tbody tr.active-row{background:rgba(199,106,42,.08);border-left:2px solid #C76A2A}
-footer{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;border-top:1px solid #4B5438;padding-top:16px;margin-top:20px;font-family:'Share Tech Mono',monospace;font-size:10px;color:#A6A08F}
-.conn-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
-.conn-ok{background:#7A8F3A}.conn-err{background:#B33A3A}
-#chart-date-label{font-size:10px;color:#A6A08F}
-#show-today-btn{display:none;padding:3px 8px;background:rgba(199,106,42,.15);border:1px solid rgba(199,106,42,.3);border-radius:4px;color:#C76A2A;font-family:'Share Tech Mono',monospace;font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer}
+  /* ── Dashboard Layout ─────────────────────────────────────── */
+  #dashboard { min-height: 100vh; display: flex; flex-direction: column; }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0.9rem 1.5rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  }
+  .brand { font-weight: 700; font-size: 1.05rem; flex: 1; min-width: 180px; }
+  .brand span { color: var(--accent); }
+  .conn-row { display: flex; align-items: center; gap: 0.5rem; }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.4s; }
+  .conn-ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .conn-err { background: var(--red); }
+  #conn-text { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; color: var(--green); }
+  #conn-time { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); }
+  .header-actions { display: flex; gap: 0.5rem; }
+  .hbtn {
+    padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 0.78rem; cursor: pointer;
+    transition: background 0.15s, border-color 0.15s; white-space: nowrap;
+  }
+  .hbtn:hover { background: var(--border); }
+  .hbtn.danger { border-color: var(--red); color: var(--red); }
+  .hbtn.danger:hover { background: rgba(239,68,68,.1); }
+  main { padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; flex: 1; }
+
+  /* ── Metric Cards ─────────────────────────────────────────── */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 1rem; }
+  .metric {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem;
+    transition: border-color 0.2s;
+  }
+  .metric:hover { border-color: var(--accent); }
+  .metric-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+  .metric-value { font-size: 2rem; font-weight: 700; line-height: 1.1; font-family: var(--mono); }
+  .metric-sub { font-size: 0.72rem; color: var(--dim); }
+  .val-occ { color: var(--accent); } .val-in { color: var(--green); }
+  .val-out { color: var(--red); } .val-peak { color: var(--amber); }
+  .val-fps { color: var(--accent2); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.65rem;
+    border-radius: 999px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
+    background: rgba(34,197,94,.12); color: var(--green); border: 1px solid rgba(34,197,94,.25);
+  }
+  .status-pill.paused { background: rgba(245,158,11,.12); color: var(--amber); border-color: rgba(245,158,11,.25); }
+  .status-pill.stopped { background: rgba(239,68,68,.12); color: var(--red); border-color: rgba(239,68,68,.25); }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.4s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  /* ── Chart + Log ──────────────────────────────────────────── */
+  .lower { display: grid; grid-template-columns: 1fr 340px; gap: 1.25rem; }
+  @media(max-width:800px){ .lower { grid-template-columns: 1fr; } }
+  .chart-card, .log-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem;
+    display: flex; flex-direction: column; gap: 0.75rem;
+  }
+  .card-title { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
+  #occupancy-chart { max-height: 220px; }
+  .log-list { display: flex; flex-direction: column; gap: 0.4rem; overflow-y: auto; max-height: 220px; }
+  .log-item {
+    display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem;
+    border-radius: 7px; background: var(--surface); font-size: 0.78rem;
+    border-left: 3px solid transparent;
+  }
+  .log-item.entered { border-color: var(--green); }
+  .log-item.exited { border-color: var(--red); }
+  .log-time { font-family: var(--mono); color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
+  .log-evt { font-weight: 600; }
+  .log-entered { color: var(--green); } .log-exited { color: var(--red); }
+  .log-count { margin-left: auto; font-family: var(--mono); color: var(--dim); font-size: 0.72rem; }
+
+  /* ── History ──────────────────────────────────────────────── */
+  .history-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; }
+  .history-header { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
+  .date-btn {
+    padding: 0.3rem 0.65rem; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--dim); font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
+  }
+  .date-btn:hover, .date-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  #date-picker { padding: 0.3rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.75rem; }
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .hist-table th { text-align: left; padding: 0.4rem 0.6rem; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
+  .hist-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(37,45,64,.5); }
+  .hist-table tr:last-child td { border-bottom: none; }
+  .insights-box { margin-top: 0.85rem; background: var(--surface); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--dim); line-height: 1.55; border-left: 3px solid var(--accent); }
+
+  #runtime-display { font-family: var(--mono); color: var(--dim); font-size: 0.78rem; }
+  .cache-badge { font-size: 0.68rem; background: rgba(245,158,11,.15); color: var(--amber); border: 1px solid rgba(245,158,11,.25); border-radius: 4px; padding: 0.1rem 0.4rem; }
 </style>
 </head>
 <body>
 
-<!-- Setup Screen -->
-<div id="setup">
+<!-- ── Setup Screen ──────────────────────────────────────── -->
+<div id="setup" class="hidden">
+  <div class="setup-logo">Edge<span>Occupy</span> AI</div>
+  <p class="setup-sub">Real-time lab occupancy monitoring powered by NVIDIA Jetson AGX Orin.</p>
   <div class="setup-card">
-    <h1>EdgeOccupy <span>AI</span></h1>
-    <p>Real-Time Lab Occupancy Monitor</p>
-    <input id="tunnel-input" class="setup-input" type="text" placeholder="iittirupatilab OR pinggy.link URL" autocomplete="off" spellcheck="false"/>
-    <button class="setup-btn" onclick="connect()">Connect to Jetson →</button>
-    <p class="setup-hint">
-      Enter your Pinggy URL or Serveo subdomain from the Jetson terminal.<br>
-      e.g. paste <code>xyz-14-139-176-131.run.pinggy-free.link</code> then click Connect.<br><br>
-      Or use the direct link format:<br>
-      <code>...github.io/real_time_lab_monitoring/#xyz-14-139-176-131.run.pinggy-free.link</code>
+    <p class="setup-hint" id="setup-hint">
+      🔍 Auto-connecting to Jetson…
     </p>
+    <input type="text" id="tunnel-input" placeholder="Or paste tunnel URL manually (e.g. abc123.lhr.life)" />
+    <button id="connect-btn" onclick="connect()">Connect to Dashboard</button>
   </div>
 </div>
 
-<!-- Dashboard -->
-<div id="dashboard">
+<!-- ── Dashboard ─────────────────────────────────────────── -->
+<div id="dashboard" class="hidden">
   <header>
-    <div class="brand">
-      <div class="badges">
-        <span class="badge b-g">Jetson AGX Orin</span>
-        <span class="badge b-a">YOLOv8m TensorRT</span>
-        <span class="badge b-o">ByteTrack</span>
-        <span style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#A6A08F;margin-left:6px" id="sync-time">Sync: --</span>
-      </div>
-      <h1>EdgeOccupy <span>AI</span></h1>
-      <p>Autonomous Laboratory Occupancy Monitoring System</p>
+    <div class="brand">Edge<span>Occupy</span> AI &mdash; IIT Tirupati</div>
+    <div class="conn-row">
+      <div class="conn-dot" id="conn-dot"></div>
+      <span id="conn-text">CONNECTING</span>
     </div>
-    <div class="controls">
-      <div id="status-banner" class="alert-normal">
-        <span class="status-dot"></span>
-        <span id="banner-text">SYSTEM ACTIVE</span>
-      </div>
-      <div class="btn-row">
-        <button id="btn-start" class="btn btn-green" onclick="ctrl('start')">Start Live</button>
-        <button id="btn-pause" class="btn btn-amber" onclick="ctrlPause()">Pause Live</button>
-        <button id="btn-stop" class="btn btn-red" onclick="ctrl('stop')">Stop Live</button>
-      </div>
+    <span id="conn-time">--:--:--</span>
+    <span id="runtime-display"></span>
+    <div class="header-actions">
+      <button class="hbtn" id="btn-pause" onclick="sendCmd('pause')">⏸ Pause</button>
+      <button class="hbtn" id="btn-resume" onclick="sendCmd('resume')">▶ Resume</button>
+      <button class="hbtn danger" onclick="sendCmd('stop')">⏹ Stop</button>
     </div>
   </header>
-
-  <!-- KPI Cards -->
-  <div class="kpi-grid">
-    <div class="kpi">
-      <div class="kpi-label">Lab Status</div>
-      <div class="kpi-val" id="k-status" style="color:#7A8F3A">EMPTY</div>
-      <div class="kpi-sub" id="k-status-sub">NO OCCUPANCY</div>
+  <main>
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">Occupancy</div><div class="metric-value val-occ" id="m-occ">—</div><div class="metric-sub" id="m-status-pill"></div></div>
+      <div class="metric"><div class="metric-label">Entered Today</div><div class="metric-value val-in" id="m-in">—</div><div class="metric-sub">people</div></div>
+      <div class="metric"><div class="metric-label">Exited Today</div><div class="metric-value val-out" id="m-out">—</div><div class="metric-sub">people</div></div>
+      <div class="metric"><div class="metric-label">Peak Today</div><div class="metric-value val-peak" id="m-peak">—</div><div class="metric-sub">max concurrent</div></div>
+      <div class="metric"><div class="metric-label">Camera FPS</div><div class="metric-value val-fps" id="m-fps">—</div><div class="metric-sub">live</div></div>
     </div>
-    <div class="kpi">
-      <div class="kpi-label">Current Occupancy</div>
-      <div class="kpi-val" id="k-occ">0</div>
-      <div class="kpi-sub">PERSONS INSIDE NOW</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Total Entries</div>
-      <div class="kpi-val" id="k-entered" style="color:#C76A2A">0</div>
-      <div class="kpi-sub">TODAY</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-label">Total Exited</div>
-      <div class="kpi-val" id="k-exited" style="color:#7A8F3A">0</div>
-      <div class="kpi-sub">TODAY</div>
-    </div>
-  </div>
-
-  <!-- Middle -->
-  <div class="mid-grid">
-    <div class="card">
-      <div class="card-title">
-        <div style="display:flex;align-items:center;gap:10px">
-          Entry / Exit Analytics
-          <button id="show-today-btn" onclick="resetDate()">SHOW TODAY</button>
-        </div>
-        <span id="chart-date-label">Today</span>
+    <div class="lower">
+      <div class="chart-card">
+        <div class="card-title">Hourly Traffic</div>
+        <canvas id="occupancy-chart"></canvas>
       </div>
-      <div class="chart-wrap"><canvas id="chart"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="card-title">
-        AI Processing Status
-        <span id="ping-dot" style="width:8px;height:8px;border-radius:50%;background:#7A8F3A;display:inline-block;animation:blink 1.5s infinite"></span>
-      </div>
-      <div class="ai-row"><span class="ai-key">Device</span><span class="ai-val">Jetson AGX Orin 64GB</span></div>
-      <div class="ai-row"><span class="ai-key">Model</span><span class="ai-val" style="color:#D99A3D">YOLOv8m TensorRT</span></div>
-      <div class="ai-row"><span class="ai-key">Tracker</span><span class="ai-val">ByteTrack</span></div>
-      <div class="ai-row"><span class="ai-key">Database</span><span class="ai-val" style="color:#9CAF70">SQLite Connected</span></div>
-      <div class="ai-row"><span class="ai-key">Runtime</span><span class="ai-val" id="k-runtime" style="color:#C76A2A">00:00:00</span></div>
-      <div class="insights">
-        <div class="insights-label">Analytics Feed</div>
-        <div id="k-insights">Connecting to Jetson...</div>
+      <div class="log-card">
+        <div class="card-title">Activity Log</div>
+        <div class="log-list" id="log-list"></div>
       </div>
     </div>
-  </div>
-
-  <!-- Historical Table -->
-  <div class="card">
-    <div class="card-title">
-      Historical Reports
-      <span style="font-size:10px">Click any date to view its hourly trend ↑</span>
-    </div>
-    <div style="overflow-x:auto">
-      <table>
-        <thead><tr>
-          <th style="text-align:left">Date</th>
-          <th>Entered</th><th>Exited</th><th>Net</th><th>Last Updated</th>
-        </tr></thead>
-        <tbody id="hist-body"><tr><td colspan="5" style="text-align:center;color:#A6A08F;padding:20px">Loading...</td></tr></tbody>
+    <div class="history-card">
+      <div class="history-header">
+        <div class="card-title" style="margin:0">Historical Records</div>
+        <button class="date-btn active" onclick="loadDate(null,this)">Today</button>
+        <button class="date-btn" onclick="loadDate('yesterday',this)">Yesterday</button>
+        <input type="date" id="date-picker" onchange="loadDate(this.value,null)">
+      </div>
+      <table class="hist-table">
+        <thead><tr><th>Date</th><th>Entered</th><th>Exited</th><th>Peak</th><th>Last Update</th></tr></thead>
+        <tbody id="hist-body"></tbody>
       </table>
+      <div class="insights-box" id="insights-box">Loading insights…</div>
     </div>
-  </div>
-
-  <footer>
-    <span>EdgeOccupy AI — IIT Tirupati Signal Processing Lab</span>
-    <span>
-      <span class="conn-dot conn-ok" id="conn-dot"></span>
-      <span id="conn-text" style="color:#9CAF70">CONNECTED</span>
-      &nbsp;|&nbsp; <span id="conn-url"></span>
-      &nbsp;|&nbsp; <span id="conn-time">--</span>
-    </span>
-  </footer>
+  </main>
 </div>
 
 <script>
@@ -212,12 +206,12 @@ let chart = null;
 let socket = null;
 let reconnectTimeout = null;
 let selectedDate = null;
-let pauseState = false;
 
 // ── URL hash → API base ───────────────────────────────────────────────────
 function init() {
   const hash = window.location.hash.replace('#','').trim();
   if (hash) {
+    // A specific tunnel was provided in the URL hash
     if (hash.includes('.') || hash.includes(':')) {
       API_BASE = hash.startsWith('http') ? hash : 'https://' + hash;
     } else {
@@ -225,7 +219,37 @@ function init() {
     }
     startDashboard();
   } else {
+    // No hash — show setup screen and attempt auto-discovery via ntfy.sh
     document.getElementById('setup').classList.remove('hidden');
+
+    fetch('https://ntfy.sh/edgeoccupy_iittirupatilab_tunnel/json?poll=1&limit=1')
+      .then(response => response.json())
+      .then(data => {
+        if (data && data.message) {
+          const activeHost = data.message.trim();
+          API_BASE = activeHost.startsWith('http') ? activeHost : 'https://' + activeHost;
+          window.location.hash = activeHost; // update URL for bookmarking
+          startDashboard();
+        } else {
+          fallbackToSetupOrCache();
+        }
+      })
+      .catch(() => fallbackToSetupOrCache());
+  }
+}
+
+function fallbackToSetupOrCache() {
+  const cached = localStorage.getItem('cached_dashboard_data');
+  if (cached) {
+    // Jetson offline but we have cached data — show historical view
+    API_BASE = 'https://offline-mode';
+    startDashboard();
+    tryLoadCache();
+    setConn(false);
+  } else {
+    // No cached data either — update hint
+    const hint = document.getElementById('setup-hint');
+    if (hint) hint.innerHTML = '⚠️ Jetson is currently offline. Start the Jetson and the page will auto-connect, or paste the tunnel URL manually.';
   }
 }
 
@@ -243,83 +267,37 @@ function connect() {
 
 function startDashboard() {
   document.getElementById('setup').classList.add('hidden');
-  document.getElementById('dashboard').classList.add('visible');
-  document.getElementById('conn-url').textContent = API_BASE;
+  document.getElementById('dashboard').classList.remove('hidden');
   initChart();
-  connectWebSocket();
+  tryLoadCache();
+  openWebSocket();
+  poll();
+  setInterval(poll, 5000);
 }
 
-// ── Chart ─────────────────────────────────────────────────────────────────
-function initChart() {
-  const ctx = document.getElementById('chart').getContext('2d');
-  chart = new Chart(ctx, {
-    type:'line',
-    data:{
-      labels:Array.from({length:24},(_,i)=>`${i}:00`),
-      datasets:[
-        {label:'Entries',data:Array(24).fill(0),borderColor:'#C76A2A',backgroundColor:'rgba(199,106,42,.1)',borderWidth:2,tension:.3,fill:true},
-        {label:'Exits',data:Array(24).fill(0),borderColor:'#7A8F3A',backgroundColor:'rgba(122,143,58,.1)',borderWidth:2,tension:.3,fill:true}
-      ]
-    },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      scales:{
-        x:{grid:{color:'rgba(75,84,56,.15)'},ticks:{color:'#A6A08F',font:{size:9,family:'Share Tech Mono'}}},
-        y:{grid:{color:'rgba(75,84,56,.15)'},ticks:{color:'#A6A08F',font:{size:9,family:'Share Tech Mono'},beginAtZero:true}}
-      },
-      plugins:{legend:{labels:{color:'#EFE7D3',font:{size:10}}}}
-    }
-  });
-}
-
-// ── WebSocket Connection & Reconnection ───────────────────────────────────
-function connectWebSocket() {
-  if (socket) {
-    try { socket.close(); } catch(e) {}
-  }
-  if (reconnectTimeout) {
-    clearTimeout(reconnectTimeout);
-    reconnectTimeout = null;
-  }
-
-  let wsUrl = API_BASE.replace('https://', 'wss://').replace('http://', 'ws://') + '/ws';
-  console.log('Connecting to WebSocket:', wsUrl);
-  socket = new WebSocket(wsUrl);
-
-  socket.onopen = () => {
-    console.log('WebSocket connected');
-    setConn(true);
-    if (selectedDate) {
-      poll();
-    }
-  };
-
-  socket.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'stats') {
-        if (selectedDate && msg.data.target_date !== selectedDate) {
-          return;
-        }
-        render(msg.data);
+// ── WebSocket ─────────────────────────────────────────────────────────────
+function openWebSocket() {
+  if (socket) { try { socket.close(); } catch(e){} }
+  if (API_BASE === 'https://offline-mode') return;
+  const wsUrl = API_BASE.replace('https://','wss://').replace('http://','ws://') + '/ws';
+  try {
+    socket = new WebSocket(wsUrl);
+    socket.onmessage = e => {
+      try {
+        const d = JSON.parse(e.data);
+        render(d);
         setConn(true);
-      }
-    } catch (e) {
-      console.error('Error parsing WS message:', e);
-    }
-  };
-
-  socket.onclose = () => {
-    console.log('WebSocket closed, reconnecting in 3s...');
-    setConn(false);
-    tryLoadCache();
-    reconnectTimeout = setTimeout(connectWebSocket, 3000);
-  };
-
-  socket.onerror = (e) => {
-    console.error('WebSocket error:', e);
-    socket.close();
-  };
+        localStorage.setItem('cached_dashboard_data', JSON.stringify(d));
+        localStorage.setItem('cached_dashboard_time', new Date().toLocaleTimeString());
+      } catch(ex){}
+    };
+    socket.onerror = () => { setConn(false); tryLoadCache(); };
+    socket.onclose = () => {
+      setConn(false);
+      tryLoadCache();
+      reconnectTimeout = setTimeout(openWebSocket, 5000);
+    };
+  } catch(e) { setConn(false); }
 }
 
 function tryLoadCache() {
@@ -333,8 +311,9 @@ function tryLoadCache() {
   }
 }
 
-// ── Poll data (HTTP Fallback/Historical) ──────────────────────────────────
+// ── Poll data ─────────────────────────────────────────────────────────────
 async function poll() {
+  if (API_BASE === 'https://offline-mode') return;
   try {
     let url = API_BASE + '/api/stats';
     if (selectedDate) url += '?date=' + selectedDate;
@@ -342,107 +321,118 @@ async function poll() {
     const d = await r.json();
     render(d);
     setConn(true);
-  } catch(e) { 
-    setConn(false); 
+    localStorage.setItem('cached_dashboard_data', JSON.stringify(d));
+    localStorage.setItem('cached_dashboard_time', new Date().toLocaleTimeString());
+  } catch(e) {
+    setConn(false);
     tryLoadCache();
   }
 }
 
 function setConn(ok) {
-  document.getElementById('conn-dot').className = 'conn-dot ' + (ok?'conn-ok':'conn-err');
+  document.getElementById('conn-dot').className = 'conn-dot ' + (ok ? 'conn-ok' : 'conn-err');
   const cachedTime = localStorage.getItem('cached_dashboard_time');
-  document.getElementById('conn-text').textContent = ok ? 'CONNECTED' : (cachedTime ? 'OFFLINE (USING CACHED DATA)' : 'DISCONNECTED');
-  document.getElementById('conn-text').style.color = ok ? '#9CAF70' : '#B33A3A';
-  document.getElementById('conn-time').textContent = ok ? new Date().toLocaleTimeString() : (cachedTime ? 'Last Sync: ' + cachedTime : '--:--:--');
+  document.getElementById('conn-text').textContent = ok ? 'CONNECTED' : (cachedTime ? 'OFFLINE — CACHED DATA' : 'DISCONNECTED');
+  document.getElementById('conn-text').style.color = ok ? '#22c55e' : '#f59e0b';
+  document.getElementById('conn-time').textContent = ok ? new Date().toLocaleTimeString() : (cachedTime ? 'Last sync: ' + cachedTime : '--:--:--');
 }
 
 // ── Render ────────────────────────────────────────────────────────────────
 function render(d) {
-  if (d && !d.is_cached) {
-    localStorage.setItem('cached_dashboard_data', JSON.stringify(d));
-    localStorage.setItem('cached_dashboard_time', new Date().toLocaleString());
+  document.getElementById('m-occ').textContent  = d.occupancy ?? '—';
+  document.getElementById('m-in').textContent   = d.entered   ?? '—';
+  document.getElementById('m-out').textContent  = d.exited    ?? '—';
+  document.getElementById('m-peak').textContent = d.peak_occupancy ?? '—';
+  document.getElementById('m-fps').textContent  = d.fps != null ? d.fps.toFixed(1) : '—';
+
+  const state = (d.detection_state || '').toUpperCase();
+  const pillMap = { RUNNING: ['RUNNING',''], PAUSED: ['PAUSED','paused'], STOPPED: ['STOPPED','stopped'], EMPTY: ['IDLE',''] };
+  const [label, cls] = pillMap[state] || [state, ''];
+  document.getElementById('m-status-pill').innerHTML =
+    `<span class="status-pill ${cls}"><span class="pill-dot"></span>${label}</span>`;
+
+  if (d.runtime) document.getElementById('runtime-display').textContent = '⏱ ' + d.runtime;
+  if (d.is_cached) {
+    const el = document.getElementById('runtime-display');
+    if (!el.innerHTML.includes('CACHED')) el.innerHTML += ' <span class="cache-badge">CACHED</span>';
   }
-  const state = d.detection_state || 'RUNNING';
-  const occ = d.occupancy || 0;
-  const ent = d.entered || 0;
-  const ex  = d.exited  || 0;
-  const today = new Date().toISOString().split('T')[0];
-  const isToday = !selectedDate || selectedDate === today;
 
-  // Banner
-  const banner = document.getElementById('status-banner');
-  const btext  = document.getElementById('banner-text');
-  if (state==='RUNNING'){banner.className='alert-normal';btext.textContent='SYSTEM ACTIVE — DETECTION RUNNING';}
-  else if(state==='PAUSED'){banner.className='alert-warning';btext.textContent='DETECTION PAUSED';}
-  else{banner.className='alert-critical';btext.textContent='DETECTION STOPPED';}
+  const logList = document.getElementById('log-list');
+  logList.innerHTML = '';
+  (d.activity_log || []).slice(0, 12).forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'log-item ' + (item.event === 'entered' ? 'entered' : 'exited');
+    div.innerHTML = `<span class="log-time">${item.time}</span>
+      <span class="log-evt ${item.event === 'entered' ? 'log-entered' : 'log-exited'}">${item.event.toUpperCase()}</span>
+      <span class="log-count">in:${item.entered_total} out:${item.exited_total}</span>`;
+    logList.appendChild(div);
+  });
 
-  // Buttons
-  const bs=document.getElementById('btn-start'),bp=document.getElementById('btn-pause'),br=document.getElementById('btn-stop');
-  if(state==='RUNNING'){bs.disabled=true;bp.textContent='Pause Live';bp.disabled=false;br.disabled=false;}
-  else if(state==='PAUSED'){bs.disabled=true;bp.textContent='Resume Live';bp.disabled=false;br.disabled=false;}
-  else{bs.disabled=false;bp.disabled=true;br.disabled=true;}
-
-  // Ping dot
-  const ping=document.getElementById('ping-dot');
-  ping.style.background=state==='RUNNING'?'#7A8F3A':state==='PAUSED'?'#D99A3D':'#B33A3A';
-
-  // KPIs
-  const ks=document.getElementById('k-status');
-  if(!isToday){ks.textContent='HISTORIC';ks.style.color='#D99A3D';document.getElementById('k-status-sub').textContent='REPORT: '+selectedDate;}
-  else if(occ>0){ks.textContent='OCCUPIED';ks.style.color='#C76A2A';document.getElementById('k-status-sub').textContent=occ+' PERSONS INSIDE';}
-  else{ks.textContent='EMPTY';ks.style.color='#7A8F3A';document.getElementById('k-status-sub').textContent='NO OCCUPANCY';}
-
-  document.getElementById('k-occ').textContent = isToday ? occ : 'N/A';
-  document.getElementById('k-entered').textContent = ent;
-  document.getElementById('k-exited').textContent  = ex;
-  document.getElementById('k-runtime').textContent = d.runtime || '00:00:00';
-  document.getElementById('k-insights').textContent = d.insights || `${ent} entries, ${ex} exits recorded.`;
-  document.getElementById('sync-time').textContent  = 'Sync: ' + (d.last_updated||'--');
-
-  // Chart
-  if(chart && d.hourly_timeline){
-    chart.data.datasets[0].data = d.hourly_timeline.entries||Array(24).fill(0);
-    chart.data.datasets[1].data = d.hourly_timeline.exits  ||Array(24).fill(0);
-    chart.update();
+  if (d.hourly_timeline && chart) {
+    chart.data.datasets[0].data = d.hourly_timeline.entries || new Array(24).fill(0);
+    chart.data.datasets[1].data = d.hourly_timeline.exits   || new Array(24).fill(0);
+    chart.update('none');
   }
-  document.getElementById('chart-date-label').textContent = isToday?'Today':selectedDate;
-  document.getElementById('show-today-btn').style.display = isToday?'none':'inline-block';
 
-  // History table
-  const tb = document.getElementById('hist-body');
-  const hist = d.historical_summary||[];
-  if(!hist.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#A6A08F;padding:20px">No historical data</td></tr>';return;}
-  tb.innerHTML='';
-  hist.forEach(row=>{
-    const net=Math.max(0,(row.entered||0)-(row.exited||0));
-    const tr=document.createElement('tr');
-    if(selectedDate===row.date) tr.className='active-row';
-    tr.innerHTML=`<td>${row.date}</td><td style="color:#C76A2A">${row.entered||0}</td><td style="color:#7A8F3A">${row.exited||0}</td><td style="color:#D99A3D">${net}</td><td style="color:#A6A08F">${row.updated||'--'}</td>`;
-    tr.onclick=()=>{selectedDate=row.date;poll();};
-    tb.appendChild(tr);
+  if (d.historical_summary) {
+    const tbody = document.getElementById('hist-body');
+    tbody.innerHTML = '';
+    d.historical_summary.forEach(row => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${row.date}</td><td style="color:var(--green)">${row.entered}</td><td style="color:var(--red)">${row.exited}</td><td style="color:var(--amber)">${row.peak || 0}</td><td style="color:var(--muted)">${row.updated || '—'}</td>`;
+      tbody.appendChild(tr);
+    });
+  }
+
+  if (d.insights) document.getElementById('insights-box').textContent = d.insights;
+}
+
+// ── Chart init ────────────────────────────────────────────────────────────
+function initChart() {
+  const ctx = document.getElementById('occupancy-chart').getContext('2d');
+  const hours = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
+  chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: hours,
+      datasets: [
+        { label: 'Entries', data: new Array(24).fill(0), backgroundColor: 'rgba(34,197,94,0.6)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 3 },
+        { label: 'Exits',   data: new Array(24).fill(0), backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: true,
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: 'rgba(37,45,64,0.8)' } },
+        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(37,45,64,0.8)' }, beginAtZero: true }
+      }
+    }
   });
 }
 
-function resetDate(){selectedDate=null;poll();}
-
-// ── Controls ──────────────────────────────────────────────────────────────
-async function ctrl(action){
-  try {
-    if (socket && socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type: 'control', action: action }));
-    } else {
-      await fetch(API_BASE+'/api/control?action='+action);
-      await poll();
-    }
-  } catch(e) {}
-}
-async function ctrlPause(){
-  const bp=document.getElementById('btn-pause');
-  await ctrl(bp.textContent.trim()==='Resume Live'?'resume':'pause');
+// ── History date selector ─────────────────────────────────────────────────
+function loadDate(dateStr, btn) {
+  if (dateStr === 'yesterday') {
+    const d = new Date(); d.setDate(d.getDate()-1);
+    selectedDate = d.toISOString().slice(0,10);
+  } else {
+    selectedDate = dateStr || null;
+  }
+  document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  poll();
 }
 
-document.addEventListener('DOMContentLoaded',init);
-document.getElementById('tunnel-input').addEventListener('keydown',e=>{if(e.key==='Enter')connect();});
+// ── Send control commands ─────────────────────────────────────────────────
+async function sendCmd(cmd) {
+  if (API_BASE === 'https://offline-mode') { alert('Jetson is offline. Cannot send commands.'); return; }
+  try { await fetch(API_BASE + '/api/' + cmd, { method: 'POST' }); poll(); }
+  catch(e) { alert('Could not reach Jetson: ' + e.message); }
+}
+
+window.onload = init;
+window.addEventListener('hashchange', () => { window.location.reload(); });
 </script>
 </body>
 </html>
