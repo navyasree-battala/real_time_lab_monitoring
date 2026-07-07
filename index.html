@@ -293,14 +293,19 @@ async function init() {
             const res  = await fetch(NTFY_TUNNEL);
             const text = await res.text();
             const lines = text.trim().split('\n');
-            const data = JSON.parse(lines[lines.length - 1]);
-            if (data && data.message) {
-                const host = data.message.trim();
-                API_BASE = host.startsWith('http') ? host : 'https://' + host;
-                window.location.hash = host;
-                setStatus('🔌 Tunnel found — connecting…');
-                launchDashboard();
-                return;
+            for (let i = lines.length - 1; i >= 0; i--) {
+                if (!lines[i].trim()) continue;
+                try {
+                    const data = JSON.parse(lines[i]);
+                    if (data && data.message) {
+                        const host = data.message.trim();
+                        API_BASE = host.startsWith('http') ? host : 'https://' + host;
+                        window.location.hash = host;
+                        setStatus('🔌 Tunnel found — connecting…');
+                        launchDashboard();
+                        return;
+                    }
+                } catch(e) {}
             }
         } catch (e) { }
 
@@ -333,23 +338,28 @@ async function fetchCloudData() {
         const res  = await fetch(NTFY_DATA);
         const text = await res.text();
         const lines = text.trim().split('\n');
-        const msg = JSON.parse(lines[lines.length - 1]);
-        if (msg && msg.message) {
-            const d = JSON.parse(msg.message);
-            return {
-                occupancy: 0,
-                entered: d.entered ?? 0,
-                exited: d.exited ?? 0,
-                peak_occupancy: d.peak ?? 0,
-                last_updated: d.updated ?? '—',
-                detection_state: 'OFFLINE',
-                runtime: '—',
-                activity_log: d.activity ?? [],
-                hourly_timeline: d.hourly ?? { entries: new Array(24).fill(0), exits: new Array(24).fill(0) },
-                historical_summary: d.history ?? [],
-                insights: d.insights ?? 'Historical data loaded from cloud cache.',
-                is_cloud_cached: true,
-            };
+        for (let i = lines.length - 1; i >= 0; i--) {
+            if (!lines[i].trim()) continue;
+            try {
+                const msg = JSON.parse(lines[i]);
+                if (msg && msg.message) {
+                    const d = JSON.parse(msg.message);
+                    return {
+                        occupancy: 0,
+                        entered: d.entered ?? 0,
+                        exited: d.exited ?? 0,
+                        peak_occupancy: d.peak ?? 0,
+                        last_updated: d.updated ?? '—',
+                        detection_state: 'OFFLINE',
+                        runtime: '—',
+                        activity_log: d.activity ?? [],
+                        hourly_timeline: d.hourly ?? { entries: new Array(24).fill(0), exits: new Array(24).fill(0) },
+                        historical_summary: d.history ?? [],
+                        insights: d.insights ?? 'Historical data loaded from cloud cache.',
+                        is_cloud_cached: true,
+                    };
+                }
+            } catch(e) {}
         }
     } catch (e) {}
     return null;
@@ -383,17 +393,23 @@ async function tryReconnect() {
         const res  = await fetch(NTFY_TUNNEL);
         const text = await res.text();
         const lines = text.trim().split('\n');
-        const data = JSON.parse(lines[lines.length - 1]);
-        if (data && data.message) {
-            const host = data.message.trim();
-            const newBase = host.startsWith('http') ? host : 'https://' + host;
-            const test = await fetch(newBase + '/api/stats', { signal: AbortSignal.timeout(4000) });
-            if (test.ok) {
-                API_BASE = newBase;
-                window.location.hash = host;
-                connectWebSocket();
-                pollLoop();
-            }
+        for (let i = lines.length - 1; i >= 0; i--) {
+            if (!lines[i].trim()) continue;
+            try {
+                const data = JSON.parse(lines[i]);
+                if (data && data.message) {
+                    const host = data.message.trim();
+                    const newBase = host.startsWith('http') ? host : 'https://' + host;
+                    const test = await fetch(newBase + '/api/stats', { signal: AbortSignal.timeout(4000) });
+                    if (test.ok) {
+                        API_BASE = newBase;
+                        window.location.hash = host;
+                        connectWebSocket();
+                        pollLoop();
+                    }
+                    return;
+                }
+            } catch(e) {}
         }
     } catch (e) {}
 }
