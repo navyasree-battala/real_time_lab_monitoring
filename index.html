@@ -1,438 +1,264 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EdgeOccupy AI — IIT Tirupati Lab Monitor</title>
-<meta name="description" content="Real-time lab occupancy monitoring dashboard for IIT Tirupati using edge AI on NVIDIA Jetson.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  :root {
-    --bg: #0d0f14; --surface: #131720; --card: #1a1f2e;
-    --border: #252d40; --accent: #3b82f6; --accent2: #8b5cf6;
-    --green: #22c55e; --red: #ef4444; --amber: #f59e0b;
-    --text: #e2e8f0; --muted: #64748b; --dim: #94a3b8;
-    --font: 'Inter', sans-serif; --mono: 'JetBrains Mono', monospace;
-  }
-  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
-
-  /* ── Setup Screen ─────────────────────────────────────────── */
-  #setup {
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    height: 100vh; gap: 1.5rem; padding: 2rem; text-align: center;
-  }
-  .setup-logo { font-size: 2.8rem; font-weight: 700; letter-spacing: -0.03em; }
-  .setup-logo span { color: var(--accent); }
-  .setup-sub { color: var(--dim); font-size: 0.95rem; max-width: 400px; line-height: 1.6; }
-  .setup-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 16px;
-    padding: 2rem; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 1rem;
-  }
-  .setup-hint { color: var(--dim); font-size: 0.82rem; line-height: 1.5; }
-  #tunnel-input {
-    width: 100%; padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; color: var(--text); font-family: var(--mono); font-size: 0.85rem;
-    outline: none; transition: border-color 0.2s;
-  }
-  #tunnel-input:focus { border-color: var(--accent); }
-  #connect-btn {
-    padding: 0.75rem; background: var(--accent); border: none; border-radius: 8px;
-    color: #fff; font-weight: 600; cursor: pointer; font-size: 0.95rem; transition: opacity 0.2s;
-  }
-  #connect-btn:hover { opacity: 0.85; }
-  .hidden { display: none !important; }
-
-  /* ── Dashboard Layout ─────────────────────────────────────── */
-  #dashboard { min-height: 100vh; display: flex; flex-direction: column; }
-  header {
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    padding: 0.9rem 1.5rem; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
-  }
-  .brand { font-weight: 700; font-size: 1.05rem; flex: 1; min-width: 180px; }
-  .brand span { color: var(--accent); }
-  .conn-row { display: flex; align-items: center; gap: 0.5rem; }
-  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); transition: background 0.4s; }
-  .conn-ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .conn-err { background: var(--red); }
-  #conn-text { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; color: var(--green); }
-  #conn-time { font-size: 0.72rem; color: var(--muted); font-family: var(--mono); }
-  .header-actions { display: flex; gap: 0.5rem; }
-  .hbtn {
-    padding: 0.4rem 0.9rem; border-radius: 6px; border: 1px solid var(--border);
-    background: var(--card); color: var(--text); font-size: 0.78rem; cursor: pointer;
-    transition: background 0.15s, border-color 0.15s; white-space: nowrap;
-  }
-  .hbtn:hover { background: var(--border); }
-  .hbtn.danger { border-color: var(--red); color: var(--red); }
-  .hbtn.danger:hover { background: rgba(239,68,68,.1); }
-  main { padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; flex: 1; }
-
-  /* ── Metric Cards ─────────────────────────────────────────── */
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 1rem; }
-  .metric {
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
-    padding: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem;
-    transition: border-color 0.2s;
-  }
-  .metric:hover { border-color: var(--accent); }
-  .metric-label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
-  .metric-value { font-size: 2rem; font-weight: 700; line-height: 1.1; font-family: var(--mono); }
-  .metric-sub { font-size: 0.72rem; color: var(--dim); }
-  .val-occ { color: var(--accent); } .val-in { color: var(--green); }
-  .val-out { color: var(--red); } .val-peak { color: var(--amber); }
-  .val-fps { color: var(--accent2); }
-  .status-pill {
-    display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.25rem 0.65rem;
-    border-radius: 999px; font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em;
-    background: rgba(34,197,94,.12); color: var(--green); border: 1px solid rgba(34,197,94,.25);
-  }
-  .status-pill.paused { background: rgba(245,158,11,.12); color: var(--amber); border-color: rgba(245,158,11,.25); }
-  .status-pill.stopped { background: rgba(239,68,68,.12); color: var(--red); border-color: rgba(239,68,68,.25); }
-  .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.4s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-  /* ── Chart + Log ──────────────────────────────────────────── */
-  .lower { display: grid; grid-template-columns: 1fr 340px; gap: 1.25rem; }
-  @media(max-width:800px){ .lower { grid-template-columns: 1fr; } }
-  .chart-card, .log-card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem;
-    display: flex; flex-direction: column; gap: 0.75rem;
-  }
-  .card-title { font-size: 0.78rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--dim); }
-  #occupancy-chart { max-height: 220px; }
-  .log-list { display: flex; flex-direction: column; gap: 0.4rem; overflow-y: auto; max-height: 220px; }
-  .log-item {
-    display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem;
-    border-radius: 7px; background: var(--surface); font-size: 0.78rem;
-    border-left: 3px solid transparent;
-  }
-  .log-item.entered { border-color: var(--green); }
-  .log-item.exited { border-color: var(--red); }
-  .log-time { font-family: var(--mono); color: var(--muted); font-size: 0.72rem; white-space: nowrap; }
-  .log-evt { font-weight: 600; }
-  .log-entered { color: var(--green); } .log-exited { color: var(--red); }
-  .log-count { margin-left: auto; font-family: var(--mono); color: var(--dim); font-size: 0.72rem; }
-
-  /* ── History ──────────────────────────────────────────────── */
-  .history-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.1rem; }
-  .history-header { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.85rem; }
-  .date-btn {
-    padding: 0.3rem 0.65rem; border-radius: 6px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--dim); font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
-  }
-  .date-btn:hover, .date-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-  #date-picker { padding: 0.3rem 0.6rem; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 0.75rem; }
-  .hist-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
-  .hist-table th { text-align: left; padding: 0.4rem 0.6rem; color: var(--muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
-  .hist-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid rgba(37,45,64,.5); }
-  .hist-table tr:last-child td { border-bottom: none; }
-  .insights-box { margin-top: 0.85rem; background: var(--surface); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.8rem; color: var(--dim); line-height: 1.55; border-left: 3px solid var(--accent); }
-
-  #runtime-display { font-family: var(--mono); color: var(--dim); font-size: 0.78rem; }
-  .cache-badge { font-size: 0.68rem; background: rgba(245,158,11,.15); color: var(--amber); border: 1px solid rgba(245,158,11,.25); border-radius: 4px; padding: 0.1rem 0.4rem; }
-</style>
-</head>
-<body>
-
-<!-- ── Setup Screen ──────────────────────────────────────── -->
-<div id="setup" class="hidden">
-  <div class="setup-logo">Edge<span>Occupy</span> AI</div>
-  <p class="setup-sub">Real-time lab occupancy monitoring powered by NVIDIA Jetson AGX Orin.</p>
-  <div class="setup-card">
-    <p class="setup-hint" id="setup-hint">
-      🔍 Auto-connecting to Jetson…
-    </p>
-    <input type="text" id="tunnel-input" placeholder="Or paste tunnel URL manually (e.g. abc123.lhr.life)" />
-    <button id="connect-btn" onclick="connect()">Connect to Dashboard</button>
-  </div>
-</div>
-
-<!-- ── Dashboard ─────────────────────────────────────────── -->
-<div id="dashboard" class="hidden">
-  <header>
-    <div class="brand">Edge<span>Occupy</span> AI &mdash; IIT Tirupati</div>
-    <div class="conn-row">
-      <div class="conn-dot" id="conn-dot"></div>
-      <span id="conn-text">CONNECTING</span>
-    </div>
-    <span id="conn-time">--:--:--</span>
-    <span id="runtime-display"></span>
-    <div class="header-actions">
-      <button class="hbtn" id="btn-pause" onclick="sendCmd('pause')">⏸ Pause</button>
-      <button class="hbtn" id="btn-resume" onclick="sendCmd('resume')">▶ Resume</button>
-      <button class="hbtn danger" onclick="sendCmd('stop')">⏹ Stop</button>
-    </div>
-  </header>
-  <main>
-    <div class="metrics">
-      <div class="metric"><div class="metric-label">Occupancy</div><div class="metric-value val-occ" id="m-occ">—</div><div class="metric-sub" id="m-status-pill"></div></div>
-      <div class="metric"><div class="metric-label">Entered Today</div><div class="metric-value val-in" id="m-in">—</div><div class="metric-sub">people</div></div>
-      <div class="metric"><div class="metric-label">Exited Today</div><div class="metric-value val-out" id="m-out">—</div><div class="metric-sub">people</div></div>
-      <div class="metric"><div class="metric-label">Peak Today</div><div class="metric-value val-peak" id="m-peak">—</div><div class="metric-sub">max concurrent</div></div>
-      <div class="metric"><div class="metric-label">Camera FPS</div><div class="metric-value val-fps" id="m-fps">—</div><div class="metric-sub">live</div></div>
-    </div>
-    <div class="lower">
-      <div class="chart-card">
-        <div class="card-title">Hourly Traffic</div>
-        <canvas id="occupancy-chart"></canvas>
-      </div>
-      <div class="log-card">
-        <div class="card-title">Activity Log</div>
-        <div class="log-list" id="log-list"></div>
-      </div>
-    </div>
-    <div class="history-card">
-      <div class="history-header">
-        <div class="card-title" style="margin:0">Historical Records</div>
-        <button class="date-btn active" onclick="loadDate(null,this)">Today</button>
-        <button class="date-btn" onclick="loadDate('yesterday',this)">Yesterday</button>
-        <input type="date" id="date-picker" onchange="loadDate(this.value,null)">
-      </div>
-      <table class="hist-table">
-        <thead><tr><th>Date</th><th>Entered</th><th>Exited</th><th>Peak</th><th>Last Update</th></tr></thead>
-        <tbody id="hist-body"></tbody>
-      </table>
-      <div class="insights-box" id="insights-box">Loading insights…</div>
-    </div>
-  </main>
-</div>
-
-<script>
-let API_BASE = '';
-let chart = null;
-let socket = null;
-let reconnectTimeout = null;
-let selectedDate = null;
-
-// ── URL hash → API base ───────────────────────────────────────────────────
-function init() {
-  const hash = window.location.hash.replace('#','').trim();
-  if (hash) {
-    // A specific tunnel was provided in the URL hash
-    if (hash.includes('.') || hash.includes(':')) {
-      API_BASE = hash.startsWith('http') ? hash : 'https://' + hash;
-    } else {
-      API_BASE = `https://${hash}.serveo.net`;
-    }
-    startDashboard();
-  } else {
-    // No hash — show setup screen and attempt auto-discovery via ntfy.sh
-    document.getElementById('setup').classList.remove('hidden');
-
-    fetch('https://ntfy.sh/edgeoccupy_iittirupatilab_tunnel/json?poll=1&limit=1')
-      .then(response => response.json())
-      .then(data => {
-        if (data && data.message) {
-          const activeHost = data.message.trim();
-          API_BASE = activeHost.startsWith('http') ? activeHost : 'https://' + activeHost;
-          window.location.hash = activeHost; // update URL for bookmarking
-          startDashboard();
-        } else {
-          fallbackToSetupOrCache();
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeOccupy AI — Tactical Occupancy Command Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        mainBg: '#12140F',
+                        primaryCard: '#1C2118',
+                        secPanel: '#252B20',
+                        elevated: '#303729',
+                        rustOrange: '#C76A2A',
+                        burntAmber: '#D99A3D',
+                        oliveGreen: '#7A8F3A',
+                        sageGreen: '#9CAF70',
+                        copperOrange: '#B85C38',
+                        mutedRed: '#B33A3A',
+                        warmWhite: '#EFE7D3',
+                        dustGrey: '#A6A08F',
+                        tacticalBorder: '#4B5438',
+                    },
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        mono: ['Share Tech Mono', 'monospace'],
+                    }
+                }
+            }
         }
-      })
-      .catch(() => fallbackToSetupOrCache());
-  }
-}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-mainBg text-warmWhite min-h-screen relative overflow-x-hidden">
+    <div class="ambient-grid"></div>
 
-function fallbackToSetupOrCache() {
-  const cached = localStorage.getItem('cached_dashboard_data');
-  if (cached) {
-    // Jetson offline but we have cached data — show historical view
-    API_BASE = 'https://offline-mode';
-    startDashboard();
-    tryLoadCache();
-    setConn(false);
-  } else {
-    // No cached data either — update hint
-    const hint = document.getElementById('setup-hint');
-    if (hint) hint.innerHTML = '⚠️ Jetson is currently offline. Start the Jetson and the page will auto-connect, or paste the tunnel URL manually.';
-  }
-}
+    <!-- Toast notification -->
+    <div id="toast" class="fixed top-4 right-4 z-50 hidden px-4 py-2 rounded text-sm font-mono font-bold border shadow-lg transition-all duration-300"></div>
 
-function connect() {
-  let val = document.getElementById('tunnel-input').value.trim();
-  if (!val) return;
-  window.location.hash = val;
-  if (val.includes('.') || val.includes(':')) {
-    API_BASE = val.startsWith('http') ? val : 'https://' + val;
-  } else {
-    API_BASE = `https://${val}.serveo.net`;
-  }
-  startDashboard();
-}
+    <div class="page-layer max-w-[1600px] mx-auto px-4 py-6 md:px-8 space-y-6">
 
-function startDashboard() {
-  document.getElementById('setup').classList.add('hidden');
-  document.getElementById('dashboard').classList.remove('hidden');
-  initChart();
-  tryLoadCache();
-  openWebSocket();
-  poll();
-  setInterval(poll, 5000);
-}
+        <!-- ================= TOP HEADER ================= -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-tacticalBorder pb-5">
+            <div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="px-2.5 py-0.5 bg-secPanel border border-tacticalBorder text-sageGreen text-[10px] font-black tracking-widest rounded font-mono uppercase">JETSON AGX ORIN</span>
+                    <span class="px-2.5 py-0.5 bg-secPanel border border-tacticalBorder text-burntAmber text-[10px] font-black tracking-widest rounded font-mono uppercase">YOLOv8m TensorRT</span>
+                    <span class="px-2.5 py-0.5 bg-secPanel border border-tacticalBorder text-rustOrange text-[10px] font-black tracking-widest rounded font-mono uppercase">ByteTrack Active</span>
+                    <span id="session-timestamp" class="text-xs text-dustGrey font-mono ml-2">Sync: Offline</span>
+                </div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-white mt-2">
+                    EdgeOccupy <span class="text-rustOrange">AI</span>
+                </h1>
+                <p class="text-xs text-dustGrey mt-0.5 tracking-wider uppercase font-mono">
+                    Autonomous Laboratory Occupancy Monitoring System
+                </p>
+            </div>
 
-// ── WebSocket ─────────────────────────────────────────────────────────────
-function openWebSocket() {
-  if (socket) { try { socket.close(); } catch(e){} }
-  if (API_BASE === 'https://offline-mode') return;
-  const wsUrl = API_BASE.replace('https://','wss://').replace('http://','ws://') + '/ws';
-  try {
-    socket = new WebSocket(wsUrl);
-    socket.onmessage = e => {
-      try {
-        const d = JSON.parse(e.data);
-        render(d);
-        setConn(true);
-        localStorage.setItem('cached_dashboard_data', JSON.stringify(d));
-        localStorage.setItem('cached_dashboard_time', new Date().toLocaleTimeString());
-      } catch(ex){}
-    };
-    socket.onerror = () => { setConn(false); tryLoadCache(); };
-    socket.onclose = () => {
-      setConn(false);
-      tryLoadCache();
-      reconnectTimeout = setTimeout(openWebSocket, 5000);
-    };
-  } catch(e) { setConn(false); }
-}
+            <!-- Controls -->
+            <div class="flex flex-wrap items-end gap-3">
 
-function tryLoadCache() {
-  const cached = localStorage.getItem('cached_dashboard_data');
-  if (cached) {
-    try {
-      const data = JSON.parse(cached);
-      data.is_cached = true;
-      render(data);
-    } catch(e) {}
-  }
-}
+                <!-- Status Banner -->
+                <div class="flex flex-col gap-2">
+                    <div id="status-banner" class="alert-banner alert-normal">
+                        <span class="status-dot"></span>
+                        <span id="banner-text">SYSTEM STATUS ACTIVE — MONITORING NODE 0</span>
+                    </div>
+                    <!-- Control Buttons -->
+                    <div class="flex bg-secPanel p-1 border border-tacticalBorder rounded gap-1.5">
+                        <button id="start-btn" class="px-3 py-1.5 bg-oliveGreen text-black text-xs font-bold rounded hover:bg-sageGreen transition duration-200">
+                            Start Live
+                        </button>
+                        <button id="pause-btn" class="px-3 py-1.5 bg-mainBg border border-tacticalBorder text-xs font-semibold rounded hover:bg-primaryCard transition duration-200">
+                            Pause Live
+                        </button>
+                        <button id="stop-btn" class="px-3 py-1.5 bg-mutedRed text-white text-xs font-bold rounded hover:bg-opacity-95 transition duration-200">
+                            Stop Live
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
 
-// ── Poll data ─────────────────────────────────────────────────────────────
-async function poll() {
-  if (API_BASE === 'https://offline-mode') return;
-  try {
-    let url = API_BASE + '/api/stats';
-    if (selectedDate) url += '?date=' + selectedDate;
-    const r = await fetch(url);
-    const d = await r.json();
-    render(d);
-    setConn(true);
-    localStorage.setItem('cached_dashboard_data', JSON.stringify(d));
-    localStorage.setItem('cached_dashboard_time', new Date().toLocaleTimeString());
-  } catch(e) {
-    setConn(false);
-    tryLoadCache();
-  }
-}
+        <!-- ================= TOP KPI CARDS (4 cards, no Peak) ================= -->
+        <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <!-- Card 1: Laboratory Status -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-rustOrange/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Lab Status</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                </div>
+                <div class="mt-4">
+                    <span id="session-status-badge" class="text-xl font-black text-oliveGreen tracking-wider font-mono">EMPTY</span>
+                </div>
+                <p id="session-status-desc" class="text-[10px] text-dustGrey mt-1 font-mono">NO ACTIVE OCCUPANCY</p>
+            </div>
 
-function setConn(ok) {
-  document.getElementById('conn-dot').className = 'conn-dot ' + (ok ? 'conn-ok' : 'conn-err');
-  const cachedTime = localStorage.getItem('cached_dashboard_time');
-  document.getElementById('conn-text').textContent = ok ? 'CONNECTED' : (cachedTime ? 'OFFLINE — CACHED DATA' : 'DISCONNECTED');
-  document.getElementById('conn-text').style.color = ok ? '#22c55e' : '#f59e0b';
-  document.getElementById('conn-time').textContent = ok ? new Date().toLocaleTimeString() : (cachedTime ? 'Last sync: ' + cachedTime : '--:--:--');
-}
+            <!-- Card 2: Current Occupancy -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-sageGreen/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Current Occupancy</span>
+                    <svg class="w-4 h-4 text-sageGreen" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="unique-persons-count" class="text-3xl font-black text-white font-mono">0</span>
+                    <span class="text-xs text-dustGrey font-mono">ACTIVE</span>
+                </div>
+                <p class="text-[10px] text-dustGrey mt-1 font-mono">PERSONS INSIDE RIGHT NOW</p>
+            </div>
 
-// ── Render ────────────────────────────────────────────────────────────────
-function render(d) {
-  document.getElementById('m-occ').textContent  = d.occupancy ?? '—';
-  document.getElementById('m-in').textContent   = d.entered   ?? '—';
-  document.getElementById('m-out').textContent  = d.exited    ?? '—';
-  document.getElementById('m-peak').textContent = d.peak_occupancy ?? '—';
-  document.getElementById('m-fps').textContent  = d.fps != null ? d.fps.toFixed(1) : '—';
+            <!-- Card 3: Total Entries -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-rustOrange/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Total Entries</span>
+                    <svg class="w-4 h-4 text-rustOrange" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="total-frames-count" class="text-3xl font-black text-white font-mono">0</span>
+                    <span class="text-xs text-dustGrey font-mono">TODAY</span>
+                </div>
+                <p class="text-[10px] text-dustGrey mt-1 font-mono">TOTAL PERSONS ENTERED</p>
+            </div>
 
-  const state = (d.detection_state || '').toUpperCase();
-  const pillMap = { RUNNING: ['RUNNING',''], PAUSED: ['PAUSED','paused'], STOPPED: ['STOPPED','stopped'], EMPTY: ['IDLE',''] };
-  const [label, cls] = pillMap[state] || [state, ''];
-  document.getElementById('m-status-pill').innerHTML =
-    `<span class="status-pill ${cls}"><span class="pill-dot"></span>${label}</span>`;
+            <!-- Card 4: Total Exited -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-4 flex flex-col justify-between hover:border-mutedRed/40 transition duration-300">
+                <div class="flex justify-between items-center text-dustGrey text-[11px] font-bold tracking-widest uppercase font-mono">
+                    <span>Total Exited</span>
+                    <svg class="w-4 h-4 text-mutedRed" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                </div>
+                <div class="mt-4 flex items-baseline gap-2">
+                    <span id="avg-confidence" class="text-3xl font-black text-white font-mono">0</span>
+                    <span class="text-xs text-dustGrey font-mono">TODAY</span>
+                </div>
+                <p class="text-[10px] text-dustGrey mt-1 font-mono">TOTAL PERSONS EXITED</p>
+            </div>
+        </section>
 
-  if (d.runtime) document.getElementById('runtime-display').textContent = '⏱ ' + d.runtime;
-  if (d.is_cached) {
-    const el = document.getElementById('runtime-display');
-    if (!el.innerHTML.includes('CACHED')) el.innerHTML += ' <span class="cache-badge">CACHED</span>';
-  }
+        <!-- ================= MIDDLE SECTION ================= -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left: Entry / Exit Analytics graph -->
+            <div class="lg:col-span-2 bg-primaryCard border border-tacticalBorder rounded p-5 flex flex-col justify-between">
+                <div class="flex justify-between items-center mb-4">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-base font-bold text-white uppercase tracking-wider font-mono">Entry / Exit Analytics</h2>
+                            <button id="reset-date-btn" class="hidden px-2 py-0.5 bg-rustOrange/20 hover:bg-rustOrange/40 text-rustOrange border border-rustOrange/30 text-[10px] font-bold rounded font-mono transition-all duration-200">
+                                SHOW TODAY
+                            </button>
+                        </div>
+                        <p class="text-xs text-dustGrey" id="chart-subtitle">Hourly crossing trends for today</p>
+                    </div>
+                    <div class="flex items-center gap-4 text-xs font-mono">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded bg-rustOrange inline-block"></span>
+                            <span>Entries</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-2.5 h-2.5 rounded bg-oliveGreen inline-block"></span>
+                            <span>Exits</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="h-[250px] relative">
+                    <canvas id="activityChart"></canvas>
+                </div>
+            </div>
 
-  const logList = document.getElementById('log-list');
-  logList.innerHTML = '';
-  (d.activity_log || []).slice(0, 12).forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'log-item ' + (item.event === 'entered' ? 'entered' : 'exited');
-    div.innerHTML = `<span class="log-time">${item.time}</span>
-      <span class="log-evt ${item.event === 'entered' ? 'log-entered' : 'log-exited'}">${item.event.toUpperCase()}</span>
-      <span class="log-count">in:${item.entered_total} out:${item.exited_total}</span>`;
-    logList.appendChild(div);
-  });
+            <!-- Right: AI Processing Status -->
+            <div class="bg-primaryCard border border-tacticalBorder rounded p-5 flex flex-col justify-between">
+                <div>
+                    <h2 class="text-base font-bold text-white uppercase tracking-wider font-mono border-b border-tacticalBorder pb-2 flex items-center justify-between">
+                        <span>AI Processing Status</span>
+                        <span id="activity-ping-dot" class="w-2 h-2 rounded-full bg-oliveGreen inline-block animate-ping"></span>
+                    </h2>
+                    <div class="mt-4 space-y-3 text-xs font-mono">
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Device:</span>
+                            <span class="text-white font-semibold">Jetson AGX Orin 64GB</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Model:</span>
+                            <span class="text-burntAmber font-semibold">YOLOv8m TensorRT</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Tracker:</span>
+                            <span class="text-white font-semibold">ByteTrack</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-tacticalBorder/40">
+                            <span class="text-dustGrey">Database:</span>
+                            <span class="text-oliveGreen font-semibold">SQLite Connected</span>
+                        </div>
+                        <div class="flex justify-between py-1">
+                            <span class="text-dustGrey">Session Runtime:</span>
+                            <span id="runtime-display" class="text-rustOrange font-semibold">00:00:00</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 p-3 bg-secPanel border border-tacticalBorder rounded text-xs">
+                    <span class="text-[10px] text-burntAmber font-bold tracking-widest uppercase block mb-1 font-mono">Cognitive Analytics Feed</span>
+                    <p id="qwen-summary-text" class="text-dustGrey leading-relaxed font-sans">
+                        Reading localized database records. Initializing stream trackers...
+                    </p>
+                </div>
+            </div>
+        </section>
 
-  if (d.hourly_timeline && chart) {
-    chart.data.datasets[0].data = d.hourly_timeline.entries || new Array(24).fill(0);
-    chart.data.datasets[1].data = d.hourly_timeline.exits   || new Array(24).fill(0);
-    chart.update('none');
-  }
+        <!-- ================= BOTTOM: HISTORICAL REPORTS TABLE ================= -->
+        <section class="bg-primaryCard border border-tacticalBorder rounded p-5">
+            <div class="flex justify-between items-center border-b border-tacticalBorder pb-3 mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-white uppercase tracking-wider font-mono">Historical Reports Table</h2>
+                    <p class="text-xs text-dustGrey">Click any date row to view that day's hourly trend in the chart above</p>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-mono text-dustGrey">
+                    <span class="w-3 h-3 rounded-full bg-secPanel border border-tacticalBorder inline-block"></span>
+                    <span>DB: counts.db</span>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="border-b border-tacticalBorder text-dustGrey uppercase font-bold tracking-wider font-mono">
+                            <th class="py-3 px-4">Date</th>
+                            <th class="py-3 px-4 text-right">Entered</th>
+                            <th class="py-3 px-4 text-right">Exited</th>
+                            <th class="py-3 px-4 text-right">Net Occupancy</th>
+                            <th class="py-3 px-4 text-right">Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="id-photos-container">
+                        <tr>
+                            <td colspan="5" class="py-6 text-center text-dustGrey text-xs">
+                                Connecting and querying database. Loading telemetry logs...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-  if (d.historical_summary) {
-    const tbody = document.getElementById('hist-body');
-    tbody.innerHTML = '';
-    d.historical_summary.forEach(row => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${row.date}</td><td style="color:var(--green)">${row.entered}</td><td style="color:var(--red)">${row.exited}</td><td style="color:var(--amber)">${row.peak || 0}</td><td style="color:var(--muted)">${row.updated || '—'}</td>`;
-      tbody.appendChild(tr);
-    });
-  }
+        <!-- Footer -->
+        <footer class="flex flex-col md:flex-row justify-between items-center gap-3 border-t border-tacticalBorder pt-5 text-[11px] text-dustGrey font-mono">
+            <span>EdgeOccupy AI — Embedded Systems Laboratory Project</span>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-1.5">
+                    <span id="connection-status" class="w-2 h-2 rounded-full bg-oliveGreen"></span>
+                    <span id="status-text" class="font-bold text-oliveGreen">CONNECTED</span>
+                </div>
+                <span id="ws-target">Server: HTTP Polling Active</span>
+                <span id="last-packet">Packet: Waiting...</span>
+            </div>
+        </footer>
+    </div>
 
-  if (d.insights) document.getElementById('insights-box').textContent = d.insights;
-}
-
-// ── Chart init ────────────────────────────────────────────────────────────
-function initChart() {
-  const ctx = document.getElementById('occupancy-chart').getContext('2d');
-  const hours = Array.from({length:24}, (_,i) => String(i).padStart(2,'0')+':00');
-  chart = new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: hours,
-      datasets: [
-        { label: 'Entries', data: new Array(24).fill(0), backgroundColor: 'rgba(34,197,94,0.6)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 3 },
-        { label: 'Exits',   data: new Array(24).fill(0), backgroundColor: 'rgba(239,68,68,0.6)', borderColor: '#ef4444', borderWidth: 1, borderRadius: 3 }
-      ]
-    },
-    options: {
-      responsive: true, maintainAspectRatio: true,
-      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
-      scales: {
-        x: { ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 8 }, grid: { color: 'rgba(37,45,64,0.8)' } },
-        y: { ticks: { color: '#64748b', font: { size: 10 } }, grid: { color: 'rgba(37,45,64,0.8)' }, beginAtZero: true }
-      }
-    }
-  });
-}
-
-// ── History date selector ─────────────────────────────────────────────────
-function loadDate(dateStr, btn) {
-  if (dateStr === 'yesterday') {
-    const d = new Date(); d.setDate(d.getDate()-1);
-    selectedDate = d.toISOString().slice(0,10);
-  } else {
-    selectedDate = dateStr || null;
-  }
-  document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  poll();
-}
-
-// ── Send control commands ─────────────────────────────────────────────────
-async function sendCmd(cmd) {
-  if (API_BASE === 'https://offline-mode') { alert('Jetson is offline. Cannot send commands.'); return; }
-  try { await fetch(API_BASE + '/api/' + cmd, { method: 'POST' }); poll(); }
-  catch(e) { alert('Could not reach Jetson: ' + e.message); }
-}
-
-window.onload = init;
-window.addEventListener('hashchange', () => { window.location.reload(); });
-</script>
+    <script src="dashboard.js"></script>
 </body>
 </html>
