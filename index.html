@@ -291,7 +291,9 @@ async function init() {
         setStatus('🔍 Auto-discovering Jetson tunnel…');
         try {
             const res  = await fetch(NTFY_TUNNEL);
-            const data = await res.json();
+            const text = await res.text();
+            const lines = text.trim().split('\n');
+            const data = JSON.parse(lines[lines.length - 1]);
             if (data && data.message) {
                 const host = data.message.trim();
                 API_BASE = host.startsWith('http') ? host : 'https://' + host;
@@ -329,7 +331,9 @@ async function init() {
 async function fetchCloudData() {
     try {
         const res  = await fetch(NTFY_DATA);
-        const msg  = await res.json();
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        const msg = JSON.parse(lines[lines.length - 1]);
         if (msg && msg.message) {
             const d = JSON.parse(msg.message);
             return {
@@ -377,7 +381,9 @@ function launchDashboard(prefetchedData) {
 async function tryReconnect() {
     try {
         const res  = await fetch(NTFY_TUNNEL);
-        const data = await res.json();
+        const text = await res.text();
+        const lines = text.trim().split('\n');
+        const data = JSON.parse(lines[lines.length - 1]);
         if (data && data.message) {
             const host = data.message.trim();
             const newBase = host.startsWith('http') ? host : 'https://' + host;
