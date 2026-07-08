@@ -257,6 +257,8 @@ let reconnectTimeout = null;
 let selectedDate = null;
 let isOnline = false;
 let pollTimer = null;
+let currentData = null;
+let originalOfflineData = null;
 
 const NTFY_TUNNEL = 'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_tunnel/json?poll=1&limit=1';
 const NTFY_DATA   = 'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_data/json?poll=1&limit=1';
@@ -387,6 +389,7 @@ function launchDashboard(prefetchedData) {
     document.getElementById('dashboard').classList.remove('hidden');
 
     if (prefetchedData) {
+        originalOfflineData = JSON.parse(JSON.stringify(prefetchedData));
         renderOffline(prefetchedData);
     } else {
         loadAnyCache();
@@ -462,7 +465,15 @@ function setupDateReset() {
         selectedDate = null;
         document.getElementById('reset-date-btn').classList.add('hidden');
         document.getElementById('chart-subtitle').textContent = 'Hourly crossing trends for today';
-        fetchData();
+        if (API_BASE === 'https://offline-mode' || !isOnline) {
+            if (originalOfflineData) {
+                const d = JSON.parse(JSON.stringify(originalOfflineData));
+                d.target_date = null;
+                updateUI(d);
+            }
+        } else {
+            fetchData();
+        }
     });
 }
 
@@ -545,6 +556,8 @@ async function fetchData() {
         const cloudData = await fetchCloudData();
         if (cloudData) {
             API_BASE = 'https://offline-mode';
+            originalOfflineData = JSON.parse(JSON.stringify(cloudData));
+            saveCache(cloudData);
             renderOffline(cloudData);
             setInterval(tryReconnect, 15000);
         } else {
@@ -562,7 +575,11 @@ function saveCache(d) {
 function loadAnyCache() {
     const raw = localStorage.getItem('realtime_edge_monitoring_data');
     if (raw) {
-        try { renderOffline(JSON.parse(raw)); } catch(e){}
+        try { 
+            const d = JSON.parse(raw);
+            originalOfflineData = JSON.parse(JSON.stringify(d));
+            renderOffline(d); 
+        } catch(e){}
     }
 }
 
@@ -599,6 +616,7 @@ function renderOffline(d) {
 }
 
 function updateUI(data) {
+    currentData = data;
     const state = (data.detection_state || 'RUNNING').toUpperCase();
     const banner = document.getElementById('status-banner');
     const bannerText = document.getElementById('banner-text');
@@ -702,16 +720,29 @@ function updateUI(data) {
         tr.addEventListener('click', () => { 
             selectedDate = rowDate; 
             if (API_BASE === 'https://offline-mode' || !isOnline) {
-                const cached = localStorage.getItem('realtime_edge_monitoring_data');
-                if (cached) {
-                    try {
-                        const d = JSON.parse(cached);
-                        if (d.raw_cloud_data && d.raw_cloud_data.history_hourly && d.raw_cloud_data.history_hourly[rowDate]) {
-                            d.hourly_timeline = d.raw_cloud_data.history_hourly[rowDate];
-                        }
-                        d.target_date = rowDate;
-                        updateUI(d);
-                    } catch(e) {}
+                let d = currentData;
+                if (!d) {
+                    const cached = localStorage.getItem('realtime_edge_monitoring_data');
+                    if (cached) {
+                        try { d = JSON.parse(cached); } catch(e) {}
+                    }
+                }
+                if (d) {
+                    const dClone = JSON.parse(JSON.stringify(d));
+                    let hourlyData = null;
+                    if (dClone.raw_cloud_data && dClone.raw_cloud_data.history_hourly && dClone.raw_cloud_data.history_hourly[rowDate]) {
+                        hourlyData = dClone.raw_cloud_data.history_hourly[rowDate];
+                    } else if (dClone.history_hourly && dClone.history_hourly[rowDate]) {
+                        hourlyData = dClone.history_hourly[rowDate];
+                    }
+                    
+                    if (hourlyData) {
+                        dClone.hourly_timeline = hourlyData;
+                    } else {
+                        dClone.hourly_timeline = { entries: new Array(24).fill(0), exits: new Array(24).fill(0) };
+                    }
+                    dClone.target_date = rowDate;
+                    updateUI(dClone);
                 }
             } else {
                 fetchData(); 
