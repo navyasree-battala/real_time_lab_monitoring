@@ -260,8 +260,16 @@ let pollTimer = null;
 let currentData = null;
 let originalOfflineData = null;
 
-const NTFY_TUNNEL = 'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_tunnel/json?poll=1&limit=1';
-const NTFY_DATA   = 'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_data/json?poll=1&limit=1';
+const NTFY_TUNNELS = [
+    'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_tunnel/json?poll=1&limit=1',
+    'https://ntfy.sh/edgeoccupy_iittirupatilab_tunnel/json?poll=1&limit=1'
+];
+const NTFY_DATAS = [
+    'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_data/json?poll=1&limit=1',
+    'https://ntfy.sh/edgeoccupy_iittirupatilab_data/json?poll=1&limit=1'
+];
+const NTFY_TUNNEL = NTFY_TUNNELS[0];
+const NTFY_DATA   = NTFY_DATAS[0];
 
 // ── Toast notification ────────────────────────────────────────────────────
 function showToast(message, type = 'success') {
@@ -303,8 +311,9 @@ async function init() {
     }
 
     setStatus('🔍 Auto-discovering Jetson tunnel…');
+    for (const url of NTFY_TUNNELS) {
         try {
-            const res  = await fetch(NTFY_TUNNEL);
+            const res  = await fetch(url);
             const text = await res.text();
             const lines = text.trim().split('\n');
             for (let i = lines.length - 1; i >= 0; i--) {
@@ -322,60 +331,74 @@ async function init() {
                 } catch(e) {}
             }
         } catch (e) { }
+    }
 
-        setStatus('📦 Loading last known data from cloud…');
-        const cloudData = await fetchCloudData();
-        if (cloudData) {
-            API_BASE = 'https://offline-mode';
-            launchDashboard(cloudData);
-            return;
-        }
+    setStatus('📦 Loading last known data from cloud…');
+    const cloudData = await fetchCloudData();
+    if (cloudData) {
+        API_BASE = 'https://offline-mode';
+        launchDashboard(cloudData);
+        return;
+    }
 
-        setStatus('💾 Checking local cache…');
-        const cached = localStorage.getItem('realtime_edge_monitoring_data');
+    setStatus('💾 Checking local cache…');
+    let cached = localStorage.getItem('realtime_edge_monitoring_data');
+    if (!cached) {
+        cached = localStorage.getItem('edgeoccupy_data') || localStorage.getItem('cached_dashboard_data');
         if (cached) {
-            try {
-                const d = JSON.parse(cached);
-                API_BASE = 'https://offline-mode';
-                launchDashboard(d);
-                return;
-            } catch (e) {}
+            // Migrate to new key
+            localStorage.setItem('realtime_edge_monitoring_data', cached);
+            const oldTime = localStorage.getItem('edgeoccupy_time') || localStorage.getItem('cached_dashboard_time');
+            if (oldTime) {
+                localStorage.setItem('realtime_edge_monitoring_time', oldTime);
+            }
         }
+    }
+    if (cached) {
+        try {
+            const d = JSON.parse(cached);
+            API_BASE = 'https://offline-mode';
+            launchDashboard(d);
+            return;
+        } catch (e) {}
+    }
 
-        setStatus('⚠️ Jetson is offline. Will auto-connect when it starts.');
-        setTimeout(init, 10000);
+    setStatus('⚠️ Jetson is offline. Will auto-connect when it starts.');
+    setTimeout(init, 10000);
 }
 
 async function fetchCloudData() {
-    try {
-        const res  = await fetch(NTFY_DATA);
-        const text = await res.text();
-        const lines = text.trim().split('\n');
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (!lines[i].trim()) continue;
-            try {
-                const msg = JSON.parse(lines[i]);
-                if (msg && msg.message) {
-                    const d = JSON.parse(msg.message);
-                    return {
-                        occupancy: 0,
-                        entered: d.entered ?? 0,
-                        exited: d.exited ?? 0,
-                        peak_occupancy: d.peak ?? 0,
-                        last_updated: d.updated ?? '—',
-                        detection_state: 'OFFLINE',
-                        runtime: '—',
-                        activity_log: d.activity ?? [],
-                        hourly_timeline: d.hourly ?? { entries: new Array(24).fill(0), exits: new Array(24).fill(0) },
-                        historical_summary: d.history ?? [],
-                        insights: d.insights ?? 'Historical data loaded from cloud cache.',
-                        is_cloud_cached: true,
-                        raw_cloud_data: d
-                    };
-                }
-            } catch(e) {}
-        }
-    } catch (e) {}
+    for (const url of NTFY_DATAS) {
+        try {
+            const res  = await fetch(url);
+            const text = await res.text();
+            const lines = text.trim().split('\n');
+            for (let i = lines.length - 1; i >= 0; i--) {
+                if (!lines[i].trim()) continue;
+                try {
+                    const msg = JSON.parse(lines[i]);
+                    if (msg && msg.message) {
+                        const d = JSON.parse(msg.message);
+                        return {
+                            occupancy: 0,
+                            entered: d.entered ?? 0,
+                            exited: d.exited ?? 0,
+                            peak_occupancy: d.peak ?? 0,
+                            last_updated: d.updated ?? '—',
+                            detection_state: 'OFFLINE',
+                            runtime: '—',
+                            activity_log: d.activity ?? [],
+                            hourly_timeline: d.hourly ?? { entries: new Array(24).fill(0), exits: new Array(24).fill(0) },
+                            historical_summary: d.history ?? [],
+                            insights: d.insights ?? 'Historical data loaded from cloud cache.',
+                            is_cloud_cached: true,
+                            raw_cloud_data: d
+                        };
+                    }
+                } catch(e) {}
+            }
+        } catch (e) {}
+    }
     return null;
 }
 
@@ -404,29 +427,31 @@ function launchDashboard(prefetchedData) {
 }
 
 async function tryReconnect() {
-    try {
-        const res  = await fetch(NTFY_TUNNEL);
-        const text = await res.text();
-        const lines = text.trim().split('\n');
-        for (let i = lines.length - 1; i >= 0; i--) {
-            if (!lines[i].trim()) continue;
-            try {
-                const data = JSON.parse(lines[i]);
-                if (data && data.message) {
-                    const host = data.message.trim();
-                    const newBase = host.startsWith('http') ? host : 'https://' + host;
-                    const test = await fetch(newBase + '/api/stats', { signal: AbortSignal.timeout(4000) });
-                    if (test.ok) {
-                        API_BASE = newBase;
-                        window.history.replaceState(null, null, '#' + host);
-                        connectWebSocket();
-                        pollLoop();
+    for (const url of NTFY_TUNNELS) {
+        try {
+            const res  = await fetch(url);
+            const text = await res.text();
+            const lines = text.trim().split('\n');
+            for (let i = lines.length - 1; i >= 0; i--) {
+                if (!lines[i].trim()) continue;
+                try {
+                    const data = JSON.parse(lines[i]);
+                    if (data && data.message) {
+                        const host = data.message.trim();
+                        const newBase = host.startsWith('http') ? host : 'https://' + host;
+                        const test = await fetch(newBase + '/api/stats', { signal: AbortSignal.timeout(4000) });
+                        if (test.ok) {
+                            API_BASE = newBase;
+                            window.history.replaceState(null, null, '#' + host);
+                            connectWebSocket();
+                            pollLoop();
+                        }
+                        return;
                     }
-                    return;
-                }
-            } catch(e) {}
-        }
-    } catch (e) {}
+                } catch(e) {}
+            }
+        } catch (e) {}
+    }
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────
@@ -573,7 +598,18 @@ function saveCache(d) {
 }
 
 function loadAnyCache() {
-    const raw = localStorage.getItem('realtime_edge_monitoring_data');
+    let raw = localStorage.getItem('realtime_edge_monitoring_data');
+    if (!raw) {
+        raw = localStorage.getItem('edgeoccupy_data') || localStorage.getItem('cached_dashboard_data');
+        if (raw) {
+            // Migrate to new key
+            localStorage.setItem('realtime_edge_monitoring_data', raw);
+            const oldTime = localStorage.getItem('edgeoccupy_time') || localStorage.getItem('cached_dashboard_time');
+            if (oldTime) {
+                localStorage.setItem('realtime_edge_monitoring_time', oldTime);
+            }
+        }
+    }
     if (raw) {
         try { 
             const d = JSON.parse(raw);
@@ -601,7 +637,9 @@ function updateConnectionStatus(state) {
         banner.classList.add('hidden');
     } else {
         dot.className = 'w-2 h-2 rounded-full bg-mutedRed';
-        const cachedTime = localStorage.getItem('realtime_edge_monitoring_time');
+        const cachedTime = localStorage.getItem('realtime_edge_monitoring_time') ||
+                           localStorage.getItem('edgeoccupy_time') ||
+                           localStorage.getItem('cached_dashboard_time');
         text.textContent = cachedTime ? 'OFFLINE (USING CACHED DATA)' : 'DISCONNECTED';
         text.className = 'font-bold text-mutedRed';
         wsTarget.textContent = 'Remote server offline';
@@ -722,7 +760,9 @@ function updateUI(data) {
             if (API_BASE === 'https://offline-mode' || !isOnline) {
                 let d = currentData;
                 if (!d) {
-                    const cached = localStorage.getItem('realtime_edge_monitoring_data');
+                    const cached = localStorage.getItem('realtime_edge_monitoring_data') ||
+                                   localStorage.getItem('edgeoccupy_data') ||
+                                   localStorage.getItem('cached_dashboard_data');
                     if (cached) {
                         try { d = JSON.parse(cached); } catch(e) {}
                     }
