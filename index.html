@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EdgeOccupy AI — Tactical Occupancy Command Center</title>
+    <title>Real-Time Lab Monitoring — Tactical Occupancy Command Center</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -75,7 +75,7 @@
     <div class="ambient-grid"></div>
 
     <div id="loading-screen">
-        <div class="loading-logo">EdgeOccupy <span>AI</span></div>
+        <div class="loading-logo">Real-Time <span>Lab Monitoring</span></div>
         <p id="loading-status" class="text-dustGrey font-mono tracking-wider">🔍 Initializing command center...</p>
     </div>
 
@@ -98,7 +98,7 @@
                     <span id="session-timestamp" class="text-xs text-dustGrey font-mono ml-2">Sync: Offline</span>
                 </div>
                 <h1 class="text-3xl font-extrabold tracking-tight text-white mt-2">
-                    EdgeOccupy <span class="text-rustOrange">AI</span>
+                    Real-Time <span class="text-rustOrange">Lab Monitoring</span>
                 </h1>
                 <p class="text-xs text-dustGrey mt-0.5 tracking-wider uppercase font-mono">
                     Autonomous Laboratory Occupancy Monitoring System
@@ -236,7 +236,7 @@
         </section>
 
         <footer class="flex flex-col md:flex-row justify-between items-center gap-3 border-t border-tacticalBorder pt-5 text-[11px] text-dustGrey font-mono">
-            <span>EdgeOccupy AI — Embedded Systems Laboratory Project</span>
+            <span>Real-Time Lab Monitoring — Embedded Systems Laboratory Project</span>
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-1.5">
                     <span id="connection-status" class="w-2 h-2 rounded-full bg-oliveGreen"></span>
@@ -258,8 +258,8 @@ let selectedDate = null;
 let isOnline = false;
 let pollTimer = null;
 
-const NTFY_TUNNEL = 'https://ntfy.sh/edgeoccupy_iittirupatilab_tunnel/json?poll=1&limit=1';
-const NTFY_DATA   = 'https://ntfy.sh/edgeoccupy_iittirupatilab_data/json?poll=1&limit=1';
+const NTFY_TUNNEL = 'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_tunnel/json?poll=1&limit=1';
+const NTFY_DATA   = 'https://ntfy.sh/realtime_edge_monitoring_iittirupatilab_data/json?poll=1&limit=1';
 
 // ── Toast notification ────────────────────────────────────────────────────
 function showToast(message, type = 'success') {
@@ -330,7 +330,7 @@ async function init() {
         }
 
         setStatus('💾 Checking local cache…');
-        const cached = localStorage.getItem('edgeoccupy_data');
+        const cached = localStorage.getItem('realtime_edge_monitoring_data');
         if (cached) {
             try {
                 const d = JSON.parse(cached);
@@ -555,12 +555,12 @@ async function fetchData() {
 
 // ── Cache & UI ────────────────────────────────────────────────────────────
 function saveCache(d) {
-    localStorage.setItem('edgeoccupy_data', JSON.stringify(d));
-    localStorage.setItem('edgeoccupy_time', new Date().toLocaleTimeString());
+    localStorage.setItem('realtime_edge_monitoring_data', JSON.stringify(d));
+    localStorage.setItem('realtime_edge_monitoring_time', new Date().toLocaleTimeString());
 }
 
 function loadAnyCache() {
-    const raw = localStorage.getItem('edgeoccupy_data');
+    const raw = localStorage.getItem('realtime_edge_monitoring_data');
     if (raw) {
         try { renderOffline(JSON.parse(raw)); } catch(e){}
     }
@@ -584,7 +584,7 @@ function updateConnectionStatus(state) {
         banner.classList.add('hidden');
     } else {
         dot.className = 'w-2 h-2 rounded-full bg-mutedRed';
-        const cachedTime = localStorage.getItem('edgeoccupy_time');
+        const cachedTime = localStorage.getItem('realtime_edge_monitoring_time');
         text.textContent = cachedTime ? 'OFFLINE (USING CACHED DATA)' : 'DISCONNECTED';
         text.className = 'font-bold text-mutedRed';
         wsTarget.textContent = 'Remote server offline';
@@ -702,7 +702,7 @@ function updateUI(data) {
         tr.addEventListener('click', () => { 
             selectedDate = rowDate; 
             if (API_BASE === 'https://offline-mode' || !isOnline) {
-                const cached = localStorage.getItem('edgeoccupy_data');
+                const cached = localStorage.getItem('realtime_edge_monitoring_data');
                 if (cached) {
                     try {
                         const d = JSON.parse(cached);
